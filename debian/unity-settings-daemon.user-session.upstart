@@ -1,0 +1,12 @@
+description "The Unity Settings Daemon"
+author "Dimitri John Ledkov <xnox@ubuntu.com>"
+
+start on started dbus and starting gnome-session
+stop on stopping gnome-session
+
+pre-start script
+    [ "$DESKTOP_SESSION" = "ubuntu" ] || { stop; exit 0; }
+end script
+
+respawn
+exec /usr/lib/unity-settings-daemon/unity-settings-daemon

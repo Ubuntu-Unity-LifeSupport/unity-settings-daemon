@@ -1,0 +1,6 @@
+unity-settings-daemon (14.04.0-0ubuntu1) trusty; urgency=low
+
+  * Fork gnome-settings-daemon so we can maintain it for Unity 7 until it is
+    replaced by the Unity 8 equivalent.
+
+ -- Robert Ancell <robert.ancell@canonical.com>  Fri, 07 Feb 2014 11:44:36 +0000
