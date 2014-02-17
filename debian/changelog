@@ -1,3 +1,11 @@
+unity-settings-daemon (14.04.0-0ubuntu2) trusty; urgency=medium
+
+  * Change power notifications from popups (expire never), to notify-osd
+    bubbles (default timeout).
+  * Start on gnome-session (ubuntu instance) only (for now).
+
+ -- Dimitri John Ledkov <xnox@ubuntu.com>  Mon, 17 Feb 2014 11:35:35 +0000
+
 unity-settings-daemon (14.04.0-0ubuntu1) trusty; urgency=low
 
   * Fork gnome-settings-daemon so we can maintain it for Unity 7 until it is

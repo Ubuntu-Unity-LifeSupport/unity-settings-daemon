@@ -1607,7 +1607,7 @@ engine_charge_critical (GsdPowerManager *manager, UpDevice *device)
                              icon,
                              &manager->priv->notification_low);
         notify_notification_set_timeout (manager->priv->notification_low,
-                                         NOTIFY_EXPIRES_NEVER);
+                                         NOTIFY_EXPIRES_DEFAULT);
         notify_notification_set_urgency (manager->priv->notification_low,
                                          NOTIFY_URGENCY_CRITICAL);
         notify_notification_set_app_name (manager->priv->notification_low, _("Power"));
@@ -1745,7 +1745,7 @@ engine_charge_action (GsdPowerManager *manager, UpDevice *device)
                              icon,
                              &manager->priv->notification_low);
         notify_notification_set_timeout (manager->priv->notification_low,
-                                         NOTIFY_EXPIRES_NEVER);
+                                         NOTIFY_EXPIRES_DEFAULT);
         notify_notification_set_urgency (manager->priv->notification_low,
                                          NOTIFY_URGENCY_CRITICAL);
         notify_notification_set_app_name (manager->priv->notification_low, _("Power"));
@@ -3094,7 +3094,7 @@ show_sleep_warning (GsdPowerManager *manager)
                 break;
         }
         notify_notification_set_timeout (manager->priv->notification_sleep_warning,
-                                         NOTIFY_EXPIRES_NEVER);
+                                         NOTIFY_EXPIRES_DEFAULT);
         notify_notification_set_urgency (manager->priv->notification_sleep_warning,
                                          NOTIFY_URGENCY_CRITICAL);
         notify_notification_set_app_name (manager->priv->notification_sleep_warning, _("Power"));
