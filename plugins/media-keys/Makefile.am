@@ -29,6 +29,8 @@ shell-key-grabber.h: Makefile.am org.gnome.ShellKeyGrabber.xml
 	              $(srcdir)/org.gnome.ShellKeyGrabber.xml
 
 libmedia_keys_la_SOURCES = 		\
+	what-did-you-plug-in/pa-backend.c \
+	what-did-you-plug-in/dialog-window.c \
 	gsd-media-keys-plugin.c		\
 	gsd-media-keys-manager.h	\
 	gsd-media-keys-manager.c	\
@@ -44,6 +46,7 @@ libmedia_keys_la_CPPFLAGS = \
 	-I$(top_srcdir)/gnome-settings-daemon			\
 	-I$(top_srcdir)/plugins/common				\
 	-I$(top_srcdir)/plugins/media-keys/gvc			\
+	-I$(top_srcdir)/plugins/media-keys/what-did-you-plug-in	\
 	-DBINDIR=\"$(bindir)\"					\
 	-DPIXMAPDIR=\""$(pkgdatadir)"\"				\
 	-DGTKBUILDERDIR=\""$(pkgdatadir)"\"			\
@@ -87,6 +90,7 @@ usd_test_media_keys_CPPFLAGS = \
 	-I$(top_srcdir)/gnome-settings-daemon			\
 	-I$(top_srcdir)/plugins/common				\
 	-I$(top_srcdir)/plugins/media-keys/gvc			\
+	-I$(top_srcdir)/plugins/media-keys/what-did-you-plug-in	\
 	-DBINDIR=\"$(bindir)\"					\
 	-DPIXMAPDIR=\""$(pkgdatadir)"\"				\
 	-DGTKBUILDERDIR=\""$(pkgdatadir)"\"			\

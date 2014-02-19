@@ -114,6 +114,7 @@ enum {
         INPUT_ADDED,
         OUTPUT_REMOVED,
         INPUT_REMOVED,
+        CARD_INFO,
         LAST_SIGNAL
 };
 
@@ -2150,6 +2151,10 @@ update_card (GvcMixerControl      *control,
                 }
         }
         g_signal_emit (G_OBJECT (control),
+                       signals[CARD_INFO],
+                       0,
+                       info);
+        g_signal_emit (G_OBJECT (control),
                        signals[CARD_ADDED],
                        0,
                        info->index);
@@ -3206,6 +3211,14 @@ gvc_mixer_control_class_init (GvcMixerControlClass *klass)
                               NULL, NULL,
                               g_cclosure_marshal_VOID__UINT,
                               G_TYPE_NONE, 1, G_TYPE_UINT);
+        signals [CARD_INFO] =
+                g_signal_new ("card-info",
+                              G_TYPE_FROM_CLASS (klass),
+                              G_SIGNAL_RUN_LAST,
+                              0,
+                              NULL, NULL,
+                              g_cclosure_marshal_VOID__POINTER,
+                              G_TYPE_NONE, 1, G_TYPE_POINTER);
         signals [CARD_ADDED] =
                 g_signal_new ("card-added",
                               G_TYPE_FROM_CLASS (klass),

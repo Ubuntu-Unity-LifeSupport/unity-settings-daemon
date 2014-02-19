@@ -1,3 +1,18 @@
+unity-settings-daemon (14.04.0+14.04.20140219-0ubuntu1) trusty; urgency=low
+
+  [ David Henningsson ]
+  * Handle unknown audio jack devices.
+
+  [ William Hua ]
+  * Revert the legacy key grabber. (LP: #1226962)
+
+  [ Sebastien Bacher ]
+  * backport upstream change to support hi-dpi screens/scaling. You can
+    change the scaling value by writting the
+    "org.gnome.desktop.interface scaling-factor" gsettings key
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 19 Feb 2014 10:44:06 +0000
+
 unity-settings-daemon (14.04.0-0ubuntu2) trusty; urgency=medium
 
   * Change power notifications from popups (expire never), to notify-osd

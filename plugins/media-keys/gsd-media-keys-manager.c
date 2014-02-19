@@ -60,7 +60,10 @@
 #include <canberra.h>
 #include <pulse/pulseaudio.h>
 #include "gvc-mixer-control.h"
+#include "gvc-mixer-control-private.h"
 #include "gvc-mixer-sink.h"
+#include "pa-backend.h"
+#include "dialog-window.h"
 
 #include <libnotify/notify.h>
 
@@ -215,6 +218,8 @@ struct GsdMediaKeysManagerPrivate
         guint           panel_name_owner_id;
         guint           have_legacy_keygrabber;
 
+        /* What did you plug in dialog */
+        pa_backend      *wdypi_pa_backend;
 };
 
 static void     gsd_media_keys_manager_class_init  (GsdMediaKeysManagerClass *klass);
@@ -741,8 +746,8 @@ grab_media_key (MediaKey            *key,
 }
 
 static gboolean
-grab_media_key_unity (MediaKey            *key,
-                      GsdMediaKeysManager *manager)
+grab_media_key_legacy (MediaKey            *key,
+                       GsdMediaKeysManager *manager)
 {
     char *tmp;
     gboolean need_flush;
@@ -832,7 +837,7 @@ gsettings_changed_cb (GSettings           *settings,
                         if (!manager->priv->have_legacy_keygrabber)
                             grab_media_key (key, manager);
                         else {
-                            if (grab_media_key_unity (key, manager))
+                            if (grab_media_key_legacy (key, manager))
                                 need_flush = TRUE;
                         }
                         break;
@@ -997,7 +1002,7 @@ add_key (GsdMediaKeysManager *manager, guint i)
 	g_ptr_array_add (manager->priv->keys, key);
 
     if (manager->priv->have_legacy_keygrabber)
-        grab_media_key_unity (key, manager);
+        grab_media_key_legacy (key, manager);
 }
 
 static void
@@ -1038,7 +1043,7 @@ init_kbd (GsdMediaKeysManager *manager)
                 g_ptr_array_add (manager->priv->keys, key);
 
                 if (manager->priv->have_legacy_keygrabber)
-                        grab_media_key_unity (key, manager);
+                        grab_media_key_legacy (key, manager);
         }
         g_strfreev (custom_paths);
 
@@ -2123,8 +2128,9 @@ do_switch_input_source_action (GsdMediaKeysManager *manager,
         GVariant *sources;
         gint i, n;
 
-        if (!manager->priv->have_legacy_keygrabber)
-                return;
+        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "ubuntu") != 0)
+                if (!manager->priv->have_legacy_keygrabber)
+                        return;
 
         settings = g_settings_new (GNOME_DESKTOP_INPUT_SOURCES_DIR);
         sources = g_settings_get_value (settings, KEY_INPUT_SOURCES);
@@ -2690,6 +2696,69 @@ update_theme_settings (GSettings           *settings,
 	}
 }
 
+
+static void
+launch_sound_settings()
+{
+    if (fork() != 0)
+        return;
+
+    /* Child process */
+    if (system("unity-control-center sound") == -1)
+        g_warning("Failed to launch sound settings.\n");
+    exit(0);
+}
+
+static void
+on_wdypi_action (int action, void *userdata)
+{
+        GsdMediaKeysManager *manager = userdata;
+        pa_backend *pb = manager->priv->wdypi_pa_backend;
+
+        pa_backend_set_context(pb, gvc_mixer_control_get_pa_context(manager->priv->volume));
+
+        switch (action) {
+        case WDYPI_DIALOG_SOUND_SETTINGS:
+                launch_sound_settings();
+                break;
+        case WDYPI_DIALOG_HEADPHONES:
+                pa_backend_set_port(pb, "analog-output-headphones", true);
+                pa_backend_set_port(pb, "analog-input-microphone-internal", false);
+                break;
+        case WDYPI_DIALOG_HEADSET:
+                pa_backend_set_port(pb, "analog-output-headphones", true);
+                pa_backend_set_port(pb, "analog-input-microphone-headset", false);
+                break;
+        case WDYPI_DIALOG_MICROPHONE:
+                pa_backend_set_port(pb, "analog-output-speaker", true);
+                pa_backend_set_port(pb, "analog-input-microphone", false);
+                break;
+        default:
+                break;
+        }
+}
+
+static void
+on_wdypi_popup (bool hsmic, bool hpmic, void *userdata)
+{
+        if (!hpmic && !hsmic)
+                wdypi_dialog_kill();
+        else wdypi_dialog_run(hsmic, hpmic, on_wdypi_action, userdata);
+}
+
+static void
+on_control_card_info_updated (GvcMixerControl     *control,
+                              gpointer            card_info,
+                              GsdMediaKeysManager *manager)
+{
+        pa_backend_card_changed (manager->priv->wdypi_pa_backend, card_info);
+#ifdef TEST_WDYPI_DIALOG
+        /* Just a simple way to test the dialog on all types of hardware
+           (pops up dialog on program start, and on every plug in) */
+        on_wdypi_popup (true, true, manager);
+#endif
+}
+
 static void
 initialize_volume_handler (GsdMediaKeysManager *manager)
 {
@@ -2702,6 +2771,8 @@ initialize_volume_handler (GsdMediaKeysManager *manager)
         gnome_settings_profile_start ("gvc_mixer_control_new");
 
         manager->priv->volume = gvc_mixer_control_new ("GNOME Volume Control Media Keys");
+
+        manager->priv->wdypi_pa_backend = pa_backend_new(on_wdypi_popup, manager);
 
         g_signal_connect (manager->priv->volume,
                           "state-changed",
@@ -2718,6 +2789,10 @@ initialize_volume_handler (GsdMediaKeysManager *manager)
         g_signal_connect (manager->priv->volume,
                           "stream-removed",
                           G_CALLBACK (on_control_stream_removed),
+                          manager);
+        g_signal_connect (manager->priv->volume,
+                          "card-info",
+                          G_CALLBACK (on_control_card_info_updated),
                           manager);
 
         gvc_mixer_control_open (manager->priv->volume);
@@ -2755,13 +2830,20 @@ on_key_grabber_ready (GObject      *source,
         init_kbd (manager);
 }
 
+static gboolean
+session_has_key_grabber (void)
+{
+        const gchar *session = g_getenv ("DESKTOP_SESSION");
+        return g_strcmp0 (session, "gnome") == 0 || g_strcmp0 (session, "ubuntu") == 0;
+}
+
 static void
 on_shell_appeared (GDBusConnection   *connection,
                    const char        *name,
                    const char        *name_owner,
                    gpointer           user_data)
 {
-        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "gnome") != 0)
+        if (!session_has_key_grabber ())
                 return;
 
         GsdMediaKeysManager *manager = user_data;
@@ -2787,7 +2869,7 @@ on_shell_vanished (GDBusConnection  *connection,
                    const char       *name,
                    gpointer          user_data)
 {
-        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "gnome") != 0)
+        if (!session_has_key_grabber ())
                 return;
 
         GsdMediaKeysManager *manager = user_data;
@@ -2807,7 +2889,7 @@ start_legacy_grabber (GDBusConnection   *connection,
         GsdMediaKeysManager *manager = user_data;
         GSList *l;
 
-        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "gnome") == 0)
+        if (session_has_key_grabber ())
                 return;
 
         manager->priv->have_legacy_keygrabber = TRUE;
@@ -2844,7 +2926,7 @@ stop_legacy_grabber (GDBusConnection  *connection,
 {
         GsdMediaKeysManager *manager = user_data;
 
-        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "gnome") == 0)
+        if (session_has_key_grabber ())
                 return;
 
         manager->priv->have_legacy_keygrabber = FALSE;
@@ -3073,6 +3155,12 @@ gsd_media_keys_manager_stop (GsdMediaKeysManager *manager)
                 gdk_flush ();
                 gdk_error_trap_pop_ignored ();
         }
+
+        if (manager->priv->wdypi_pa_backend) {
+                pa_backend_free (manager->priv->wdypi_pa_backend);
+                manager->priv->wdypi_pa_backend = NULL;
+        }
+        wdypi_dialog_kill();
 
         if (priv->grab_cancellable != NULL) {
                 g_cancellable_cancel (priv->grab_cancellable);
