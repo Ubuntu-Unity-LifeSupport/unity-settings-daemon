@@ -428,23 +428,7 @@ get_window_scale (GnomeXSettingsManager *manager)
         window_scale =
                 g_settings_get_uint (interface_settings, SCALING_FACTOR_KEY);
         if (window_scale == 0) {
-                display = gdk_display_get_default ();
-                screen = gdk_display_get_default_screen (display);
-                gdk_screen_get_monitor_geometry (screen, 0, &rect);
-                width_mm = gdk_screen_get_monitor_width_mm (screen, 0);
-                height_mm = gdk_screen_get_monitor_height_mm (screen, 0);
-                monitor_scale = gdk_screen_get_monitor_scale_factor (screen, 0);
-
                 window_scale = 1;
-                if (width_mm > 0 && height_mm > 0) {
-                        dpi_x = (double)rect.width * monitor_scale / (width_mm / 25.4);
-                        dpi_y = (double)rect.height * monitor_scale / (height_mm / 25.4);
-                        /* We don't completely trust these values so both
-                           must be high, and never pick higher ratio than
-                           2 automatically */
-                        if (dpi_x > HIDPI_LIMIT && dpi_y > HIDPI_LIMIT)
-                                window_scale = 2;
-                }
         }
 
         return window_scale;

@@ -1,3 +1,13 @@
+unity-settings-daemon (14.04.0+14.04.20140221.1-0ubuntu1) trusty; urgency=low
+
+  [ Iain Lane ]
+  * Instead of autodetecting the scaling factor, default to 1 if the key
+    is set to '0'. unity-control-center should be calculating the value
+    and setting this key accordingly, otherwise the Unity and gtk values
+    can get out of sync.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 21 Feb 2014 18:45:23 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140221-0ubuntu1) trusty; urgency=low
 
   [ Iain Lane ]
