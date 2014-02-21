@@ -2344,29 +2344,25 @@ static void
 do_screenshot_action (GsdMediaKeysManager *manager,
                       MediaKeyType         type)
 {
-        if (!manager->priv->have_legacy_keygrabber)
-                gsd_screenshot_take (type);
-        else {
-                switch (type){
-                case SCREENSHOT_KEY:
-                        execute (manager, "gnome-screenshot", FALSE);
-                        break;
-                case WINDOW_SCREENSHOT_KEY:
-                        execute (manager, "gnome-screenshot --window", FALSE);
-                        break;
-                case AREA_SCREENSHOT_KEY:
-                        execute (manager, "gnome-screenshot --area", FALSE);
-                        break;
-                case SCREENSHOT_CLIP_KEY:
-                        execute (manager, "gnome-screenshot --clipboard", FALSE);
-                        break;
-                case WINDOW_SCREENSHOT_CLIP_KEY:
-                        execute (manager, "gnome-screenshot --window --clipboard", FALSE);
-                        break;
-                case AREA_SCREENSHOT_CLIP_KEY:
-                        execute (manager, "gnome-screenshot --area --clipboard", FALSE);
-                }
-        }
+    switch (type){
+        case SCREENSHOT_KEY:
+            execute (manager, "gnome-screenshot", FALSE);
+            break;
+        case WINDOW_SCREENSHOT_KEY:
+            execute (manager, "gnome-screenshot --window", FALSE);
+            break;
+        case AREA_SCREENSHOT_KEY:
+            execute (manager, "gnome-screenshot --area", FALSE);
+            break;
+        case SCREENSHOT_CLIP_KEY:
+            execute (manager, "gnome-screenshot --clipboard", FALSE);
+            break;
+        case WINDOW_SCREENSHOT_CLIP_KEY:
+            execute (manager, "gnome-screenshot --window --clipboard", FALSE);
+            break;
+        case AREA_SCREENSHOT_CLIP_KEY:
+            execute (manager, "gnome-screenshot --area --clipboard", FALSE);
+    }
 }
 
 static void
