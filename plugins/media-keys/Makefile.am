@@ -82,6 +82,8 @@ usd_test_media_keys_SOURCES =			\
 	gsd-screenshot-utils.h			\
 	gsd-screenshot-utils.c			\
 	test-media-keys.c			\
+	what-did-you-plug-in/pa-backend.c	\
+	what-did-you-plug-in/dialog-window.c	\
 	$(BUILT_SOURCES)			\
 	$(NULL)
 

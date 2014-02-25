@@ -1,3 +1,13 @@
+unity-settings-daemon (14.04.0+14.04.20140225-0ubuntu1) trusty; urgency=low
+
+  [ Lars Uebernickel ]
+  * media-keys: add support for allow-amplified-volume When that key is
+    set, the maximum volume is PA_VOLUME_UI_MAX instead of
+    PA_VOLUME_NORM. This makes it consistent with the sound indicator
+    and system settings.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Tue, 25 Feb 2014 09:33:38 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140221.1-0ubuntu1) trusty; urgency=low
 
   [ Iain Lane ]

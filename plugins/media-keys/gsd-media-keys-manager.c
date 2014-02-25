@@ -115,7 +115,6 @@ static const gchar introspection_xml[] =
 #define HIGH_CONTRAST "HighContrast"
 
 #define VOLUME_STEP 6           /* percents for one volume button press */
-#define MAX_VOLUME 65536.0
 
 #define GNOME_DESKTOP_INPUT_SOURCES_DIR "org.gnome.desktop.input-sources"
 #define KEY_CURRENT_INPUT_SOURCE "current"
@@ -166,6 +165,7 @@ struct GsdMediaKeysManagerPrivate
         GSettings       *settings;
         GSettings       *input_settings;
         GHashTable      *custom_settings;
+        GSettings       *sound_settings;
 
         GPtrArray       *keys;
 
@@ -1487,6 +1487,7 @@ do_sound_action (GsdMediaKeysManager *manager,
         gboolean old_muted, new_muted;
         guint old_vol, new_vol, norm_vol_step, osd_vol;
         gboolean sound_changed;
+        pa_volume_t max_volume;
 
         /* Find the stream that corresponds to the device, if any */
         stream = NULL;
@@ -1503,6 +1504,11 @@ do_sound_action (GsdMediaKeysManager *manager,
 
         if (stream == NULL)
                 return;
+
+        if (g_settings_get_boolean (manager->priv->sound_settings, "allow-amplified-volume"))
+                max_volume = PA_VOLUME_UI_MAX;
+        else
+                max_volume = PA_VOLUME_NORM;
 
         norm_vol_step = PA_VOLUME_NORM * VOLUME_STEP / 100;
 
@@ -1527,7 +1533,7 @@ do_sound_action (GsdMediaKeysManager *manager,
                 new_muted = FALSE;
                 /* When coming out of mute only increase the volume if it was 0 */
                 if (!old_muted || old_vol == 0)
-                        new_vol = MIN (old_vol + norm_vol_step, MAX_VOLUME);
+                        new_vol = MIN (old_vol + norm_vol_step, max_volume);
                 break;
         }
 
@@ -1545,10 +1551,10 @@ do_sound_action (GsdMediaKeysManager *manager,
 
         if (type == VOLUME_DOWN_KEY && old_vol == 0 && old_muted)
                 osd_vol = -1;
-        else if (type == VOLUME_UP_KEY && old_vol == PA_VOLUME_NORM && !old_muted)
+        else if (type == VOLUME_UP_KEY && old_vol == max_volume && !old_muted)
                 osd_vol = 101;
         else if (!new_muted)
-                osd_vol = (int) (100 * (double) new_vol / PA_VOLUME_NORM);
+                osd_vol = (int) (100 * (double) new_vol / max_volume);
         else
                 osd_vol = 0;
 
@@ -2958,6 +2964,8 @@ start_media_keys_idle_cb (GsdMediaKeysManager *manager)
           g_hash_table_new_full (g_str_hash, g_str_equal,
                                  g_free, g_object_unref);
 
+        manager->priv->sound_settings = g_settings_new ("com.ubuntu.sound");
+
         /* Sound events */
         ca_context_create (&manager->priv->ca);
         ca_context_set_driver (manager->priv->ca, "pulse");
@@ -3089,6 +3097,7 @@ gsd_media_keys_manager_stop (GsdMediaKeysManager *manager)
         g_clear_object (&priv->power_proxy);
         g_clear_object (&priv->power_screen_proxy);
         g_clear_object (&priv->power_keyboard_proxy);
+        g_clear_object (&priv->sound_settings);
 
         if (manager->priv->name_owner_id) {
                 g_bus_unwatch_name (manager->priv->name_owner_id);
