@@ -23,7 +23,7 @@ test_gtk_modules_CPPFLAGS =				\
 	-I$(top_srcdir)/gnome-settings-daemon		\
 	-I$(top_srcdir)/data/				\
 	-DGNOME_SETTINGS_LOCALEDIR=\""$(datadir)/locale"\" \
-	-DGTK_MODULES_DIRECTORY=\""$(libdir)/gnome-settings-daemon-@GSD_API_VERSION@/gtk-modules/"\" \
+	-DGTK_MODULES_DIRECTORY=\""$(libdir)/unity-settings-daemon-@GSD_API_VERSION@/gtk-modules/"\" \
 	$(AM_CPPFLAGS)
 
 libexec_PROGRAMS = usd-test-xsettings
@@ -67,7 +67,7 @@ libxsettings_la_CPPFLAGS =					\
 	-I$(top_srcdir)/gnome-settings-daemon			\
 	-I$(top_srcdir)/data/					\
 	-DGNOME_SETTINGS_LOCALEDIR=\""$(datadir)/locale"\"	\
-	-DGTK_MODULES_DIRECTORY=\""$(libdir)/gnome-settings-daemon-@GSD_API_VERSION@/gtk-modules/"\" \
+	-DGTK_MODULES_DIRECTORY=\""$(libdir)/unity-settings-daemon-@GSD_API_VERSION@/gtk-modules/"\" \
 	$(AM_CPPFLAGS)
 
 libxsettings_la_CFLAGS = \

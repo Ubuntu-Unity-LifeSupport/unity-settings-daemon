@@ -1,3 +1,17 @@
+unity-settings-daemon (14.04.0+14.04.20140228-0ubuntu1) trusty; urgency=low
+
+  [ Sebastien Bacher ]
+  * Backport some small upstream bugfixes
+  * Enforce schemas from the same serie, some ppa are shipping newer
+    versions of gnome-settings-daemon which drop keys and that's leading
+    to reports against unity-settings-daemon. That way users are warned
+    and get to choose what option they want.
+
+  [ Luke Yelavich ]
+  * Look for gtk-modules related files in the correct location.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 28 Feb 2014 17:08:18 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140225-0ubuntu1) trusty; urgency=low
 
   [ Lars Uebernickel ]
