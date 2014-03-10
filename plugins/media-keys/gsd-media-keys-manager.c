@@ -2698,19 +2698,6 @@ update_theme_settings (GSettings           *settings,
 	}
 }
 
-
-static void
-launch_sound_settings()
-{
-    if (fork() != 0)
-        return;
-
-    /* Child process */
-    if (system("unity-control-center sound") == -1)
-        g_warning("Failed to launch sound settings.\n");
-    exit(0);
-}
-
 static void
 on_wdypi_action (int action, void *userdata)
 {
@@ -2721,7 +2708,7 @@ on_wdypi_action (int action, void *userdata)
 
         switch (action) {
         case WDYPI_DIALOG_SOUND_SETTINGS:
-                launch_sound_settings();
+                execute(manager, "unity-control-center sound", FALSE);
                 break;
         case WDYPI_DIALOG_HEADPHONES:
                 pa_backend_set_port(pb, "analog-output-headphones", true);

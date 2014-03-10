@@ -2,6 +2,7 @@
 #include <glib/gi18n.h>
 #include <gtk/gtk.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
+#include <gdk/gdkx.h>
 
 #include "dialog-window.h"
 
@@ -82,6 +83,7 @@ static GtkWidget * create_icon_button(int response, const char *name, const char
 
 static void dialog_create(dialog_window *d, bool show_headset, bool show_mic)
 {
+    guint32 timestamp;
     d->dialog = gtk_dialog_new();
     gtk_window_set_title(GTK_WINDOW(d->dialog), _("Unknown Audio Device"));
     gtk_container_set_border_width(GTK_CONTAINER(d->dialog), 6);
@@ -117,6 +119,12 @@ static void dialog_create(dialog_window *d, bool show_headset, bool show_mic)
     g_signal_connect(d->dialog, "response", G_CALLBACK(on_response), d);
 
     gtk_widget_show_all(d->dialog);
+    /* This event did not originate from a pointer or key movement, so we can't
+       use GDK_CURRENT_TIME (or just gtk_window_present) here. There is also no
+       other source timestamp to rely on. Without a timestamp, the dialog would
+       often show up behind other windows. */
+    timestamp = gdk_x11_get_server_time(gtk_widget_get_window(GTK_WIDGET(d->dialog)));
+    gtk_window_present_with_time(GTK_WINDOW(d->dialog), timestamp);
 }
 
 void wdypi_dialog_run(bool show_headset, bool show_mic, wdypi_dialog_cb cb, void *cb_userdata)
