@@ -1,3 +1,11 @@
+unity-settings-daemon (14.04.0+14.04.20140310-0ubuntu2) trusty; urgency=medium
+
+  * unity-settings-demon.user-session.upstart: Use XDG_CURRENT_DESKTOP
+    as the instance specifier for gnome-session upstart jobs, since
+    other sessions apart from ubuntu will need to use u-s-d (LP: #1224217) 
+
+ -- Tim Lunn <tim@feathertop.org>  Wed, 12 Mar 2014 16:45:51 +1100
+
 unity-settings-daemon (14.04.0+14.04.20140310-0ubuntu1) trusty; urgency=low
 
   [ David Henningsson ]
