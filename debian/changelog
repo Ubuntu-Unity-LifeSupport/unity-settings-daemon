@@ -1,3 +1,13 @@
+unity-settings-daemon (14.04.0+14.04.20140402-0ubuntu1) trusty; urgency=low
+
+  [ Jackson Doak ]
+  * define XF86AudioMicMute as a mic mute key
+
+  [ William Hua ]
+  * Treat IBus engines with 'default' layouts as 'us'. (LP: #1298740)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 02 Apr 2014 11:06:42 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140310-0ubuntu2) trusty; urgency=medium
 
   * unity-settings-demon.user-session.upstart: Use XDG_CURRENT_DESKTOP

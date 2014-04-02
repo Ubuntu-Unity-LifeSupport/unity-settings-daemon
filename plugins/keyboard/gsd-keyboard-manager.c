@@ -1144,6 +1144,10 @@ apply_input_sources_settings (GSettings          *settings,
                         const gchar *ibus_layout;
                         ibus_layout = ibus_engine_desc_get_layout (engine_desc);
 
+                        /* LP: #1298740 */
+                        if (g_strcmp0 (ibus_layout, "default") == 0)
+                                ibus_layout = "us";
+
                         if (ibus_layout) {
                                 layout = layout_from_ibus_layout (ibus_layout);
                                 variant = variant_from_ibus_layout (ibus_layout);
