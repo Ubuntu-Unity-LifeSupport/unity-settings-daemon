@@ -1,3 +1,13 @@
+unity-settings-daemon (14.04.0+14.04.20140404-0ubuntu1) trusty; urgency=low
+
+  [ William Hua ]
+  * Add a private DBus method that allows us to change the current input
+    source without saving it in GSettings. This is needed for indicator-
+    keyboard to temporarily switch input sources on the lock screen
+    without affecting the user's session input source.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 04 Apr 2014 16:20:28 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140402-0ubuntu1) trusty; urgency=low
 
   [ Jackson Doak ]

@@ -119,10 +119,12 @@ struct GsdKeyboardManagerPrivate
         GDBusConnection *dbus_connection;
         GDBusNodeInfo *dbus_introspection;
         guint dbus_own_name_id;
-        guint dbus_register_object_id;
+        GSList *dbus_register_object_ids;
 
         GDBusMethodInvocation *invocation;
         guint pending_ops;
+
+        gint active_input_source;
 };
 
 static void     gsd_keyboard_manager_class_init  (GsdKeyboardManagerClass *klass);
@@ -143,6 +145,12 @@ static const gchar introspection_xml[] =
         "<node>"
         "  <interface name='org.gnome.SettingsDaemon.Keyboard'>"
         "    <method name='SetInputSource'>"
+        "      <arg type='u' name='idx' direction='in'/>"
+        "    </method>"
+        "  </interface>"
+        /* Ubuntu-specific */
+        "  <interface name='com.canonical.SettingsDaemon.Keyboard.Private'>"
+        "    <method name='ActivateInputSource'>"
         "      <arg type='u' name='idx' direction='in'/>"
         "    </method>"
         "  </interface>"
@@ -1072,43 +1080,27 @@ manager_notify_is_loaded_cb (GObject    *object,
 }
 
 static gboolean
-apply_input_sources_settings (GSettings          *settings,
-                              gpointer            keys,
-                              gint                n_keys,
-                              GsdKeyboardManager *manager)
+apply_input_source (GsdKeyboardManager *manager,
+                    guint               current)
 {
         GsdKeyboardManagerPrivate *priv = manager->priv;
         GVariant *sources;
-        guint current;
         guint n_sources;
         const gchar *type = NULL;
         const gchar *id = NULL;
         gchar *layout = NULL;
         gchar *variant = NULL;
         gchar **options = NULL;
-        ActUserManager *user_manager;
-        gboolean user_manager_loaded;
 
         sources = g_settings_get_value (priv->input_sources_settings, KEY_INPUT_SOURCES);
-        current = g_settings_get_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE);
         n_sources = g_variant_n_children (sources);
-
-        user_manager = act_user_manager_get_default ();
-        g_object_get (user_manager, "is-loaded", &user_manager_loaded, NULL);
-        if (user_manager_loaded)
-                manager_notify_is_loaded_cb (G_OBJECT (user_manager), NULL, settings);
-        else
-                g_signal_connect (user_manager, "notify::is-loaded", G_CALLBACK (manager_notify_is_loaded_cb), settings);
 
         if (n_sources < 1)
                 goto exit;
+        else if (current >= n_sources)
+                current = n_sources - 1;
 
-        if (current >= n_sources) {
-                g_settings_set_uint (priv->input_sources_settings,
-                                     KEY_CURRENT_INPUT_SOURCE,
-                                     n_sources - 1);
-                goto exit;
-        }
+        priv->active_input_source = current;
 
 #ifdef HAVE_IBUS
         maybe_start_ibus (manager);
@@ -1177,6 +1169,49 @@ apply_input_sources_settings (GSettings          *settings,
         g_free (layout);
         g_free (variant);
         g_strfreev (options);
+        return TRUE;
+}
+
+static gboolean
+apply_input_sources_settings (GSettings          *settings,
+                              gpointer            keys,
+                              gint                n_keys,
+                              GsdKeyboardManager *manager)
+{
+        GsdKeyboardManagerPrivate *priv = manager->priv;
+        GVariant *sources;
+        guint n_sources;
+        guint current;
+        ActUserManager *user_manager;
+        gboolean user_manager_loaded;
+
+        sources = g_settings_get_value (priv->input_sources_settings, KEY_INPUT_SOURCES);
+        n_sources = g_variant_n_children (sources);
+
+        if (n_sources < 1) {
+                apply_xkb_settings (manager, NULL, NULL, prepare_xkb_options (manager, 0, NULL));
+                maybe_return_from_set_input_source (manager);
+                goto exit;
+        }
+
+        current = g_settings_get_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE);
+
+        if (current >= n_sources) {
+                g_settings_set_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE, n_sources - 1);
+                goto exit;
+        }
+
+        user_manager = act_user_manager_get_default ();
+        g_object_get (user_manager, "is-loaded", &user_manager_loaded, NULL);
+        if (user_manager_loaded)
+                manager_notify_is_loaded_cb (G_OBJECT (user_manager), NULL, priv->input_sources_settings);
+        else
+                g_signal_connect (user_manager, "notify::is-loaded", G_CALLBACK (manager_notify_is_loaded_cb), priv->input_sources_settings);
+
+        apply_input_source (manager, current);
+
+exit:
+        g_variant_unref (sources);
         /* Prevent individual "changed" signal invocations since we
            don't need them. */
         return TRUE;
@@ -1630,19 +1665,31 @@ increment_set_input_source_ops (GsdKeyboardManager *manager)
 }
 
 static void
-set_input_source (GsdKeyboardManager *manager)
+set_input_source (GsdKeyboardManager *manager,
+                  gboolean            persist)
 {
         GsdKeyboardManagerPrivate *priv = manager->priv;
         guint idx;
 
         g_variant_get (g_dbus_method_invocation_get_parameters (priv->invocation), "(u)", &idx);
 
-        if (idx == g_settings_get_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE)) {
-                maybe_return_from_set_input_source (manager);
-                return;
-        }
+        if (persist) {
+                if (idx == priv->active_input_source) {
+                        if (idx == g_settings_get_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE)) {
+                                maybe_return_from_set_input_source (manager);
+                                return;
+                        }
+                }
 
-        g_settings_set_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE, idx);
+                g_settings_set_uint (priv->input_sources_settings, KEY_CURRENT_INPUT_SOURCE, idx);
+        } else {
+                if (idx == priv->active_input_source) {
+                        maybe_return_from_set_input_source (manager);
+                        return;
+                }
+
+                apply_input_source (manager, idx);
+        }
 }
 
 static void
@@ -1656,8 +1703,13 @@ handle_dbus_method_call (GDBusConnection       *connection,
                          GsdKeyboardManager    *manager)
 {
         GsdKeyboardManagerPrivate *priv = manager->priv;
+        gboolean is_set_input_source;
+        gboolean is_activate_input_source;
 
-        if (g_str_equal (method_name, "SetInputSource")) {
+        is_set_input_source = g_str_equal (method_name, "SetInputSource");
+        is_activate_input_source = g_str_equal (method_name, "ActivateInputSource");
+
+        if (is_set_input_source || is_activate_input_source) {
                 if (priv->invocation) {
 #ifdef HAVE_IBUS
                         /* This can only happen if there's an
@@ -1669,7 +1721,7 @@ handle_dbus_method_call (GDBusConnection       *connection,
                         priv->pending_ops = 0;
                 }
                 priv->invocation = invocation;
-                set_input_source (manager);
+                set_input_source (manager, is_set_input_source);
         }
 }
 
@@ -1688,6 +1740,7 @@ got_session_bus (GObject            *source,
 {
         GsdKeyboardManagerPrivate *priv;
         GDBusConnection *connection;
+        GDBusInterfaceInfo **interfaces;
         GError *error = NULL;
         GDBusInterfaceVTable vtable = {
                 (GDBusInterfaceMethodCallFunc) handle_dbus_method_call,
@@ -1705,18 +1758,36 @@ got_session_bus (GObject            *source,
 
         priv = manager->priv;
         priv->dbus_connection = connection;
+        interfaces = priv->dbus_introspection->interfaces;
 
-        priv->dbus_register_object_id = g_dbus_connection_register_object (priv->dbus_connection,
-                                                                           GSD_KEYBOARD_DBUS_PATH,
-                                                                           priv->dbus_introspection->interfaces[0],
-                                                                           &vtable,
-                                                                           manager,
-                                                                           NULL,
-                                                                           &error);
-        if (!priv->dbus_register_object_id) {
-                g_warning ("Error registering object: %s", error->message);
-                g_error_free (error);
-                return;
+        if (interfaces) {
+                for (; *interfaces; interfaces++) {
+                        guint id = g_dbus_connection_register_object (priv->dbus_connection,
+                                                                      GSD_KEYBOARD_DBUS_PATH,
+                                                                      *interfaces,
+                                                                      &vtable,
+                                                                      manager,
+                                                                      NULL,
+                                                                      &error);
+
+                        if (!id) {
+                                GSList *ids;
+
+                                for (ids = priv->dbus_register_object_ids; ids; ids = g_slist_next (ids))
+                                        g_dbus_connection_unregister_object (priv->dbus_connection,
+                                                                             GPOINTER_TO_UINT (ids->data));
+
+                                g_slist_free (priv->dbus_register_object_ids);
+                                priv->dbus_register_object_ids = NULL;
+
+                                g_warning ("Error registering object: %s", error->message);
+                                g_error_free (error);
+                                return;
+                        }
+
+                        priv->dbus_register_object_ids = g_slist_prepend (priv->dbus_register_object_ids,
+                                                                          GUINT_TO_POINTER (id));
+                }
         }
 
         priv->dbus_own_name_id = g_bus_own_name_on_connection (priv->dbus_connection,
@@ -1842,6 +1913,7 @@ void
 gsd_keyboard_manager_stop (GsdKeyboardManager *manager)
 {
         GsdKeyboardManagerPrivate *p = manager->priv;
+        GSList *ids;
 
         g_debug ("Stopping keyboard manager");
 
@@ -1850,11 +1922,11 @@ gsd_keyboard_manager_stop (GsdKeyboardManager *manager)
                 p->dbus_own_name_id = 0;
         }
 
-        if (p->dbus_register_object_id) {
-                g_dbus_connection_unregister_object (p->dbus_connection,
-                                                     p->dbus_register_object_id);
-                p->dbus_register_object_id = 0;
-        }
+        for (ids = p->dbus_register_object_ids; ids; ids = g_slist_next (ids))
+                g_dbus_connection_unregister_object (p->dbus_connection, GPOINTER_TO_UINT (ids->data));
+
+        g_slist_free (p->dbus_register_object_ids);
+        p->dbus_register_object_ids = NULL;
 
         g_cancellable_cancel (p->cancellable);
         g_clear_object (&p->cancellable);
@@ -1896,6 +1968,7 @@ static void
 gsd_keyboard_manager_init (GsdKeyboardManager *manager)
 {
         manager->priv = GSD_KEYBOARD_MANAGER_GET_PRIVATE (manager);
+        manager->priv->active_input_source = -1;
 }
 
 static void
