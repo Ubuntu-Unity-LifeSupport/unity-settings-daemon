@@ -1,3 +1,10 @@
+unity-settings-daemon (14.04.0+14.04.20140407-0ubuntu1) trusty; urgency=low
+
+  [ William Hua ]
+  * Revert regression caused by commit 4033. (LP: #1302353)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 07 Apr 2014 14:55:36 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140404-0ubuntu1) trusty; urgency=low
 
   [ William Hua ]
