@@ -1,3 +1,11 @@
+unity-settings-daemon (14.04.0+14.04.20140414-0ubuntu1) trusty; urgency=low
+
+  [ Dmitry Shachnev ]
+  * Backport g-s-d patch to fix consecutive xkb grp: options not being
+    stripped, thanks Роман Донченко.
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 14 Apr 2014 10:13:11 +0000
+
 unity-settings-daemon (14.04.0+14.04.20140407-0ubuntu1) trusty; urgency=low
 
   [ William Hua ]
