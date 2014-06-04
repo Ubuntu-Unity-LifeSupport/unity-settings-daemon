@@ -127,6 +127,9 @@ struct GsdXrandrManagerPrivate {
 #ifdef HAVE_WACOM
         WacomDeviceDatabase *wacom_db;
 #endif /* HAVE_WACOM */
+
+        int main_touchscreen_id;
+        gchar *main_touchscreen_name;
 };
 
 static const GnomeRRRotation possible_rotations[] = {
@@ -156,6 +159,10 @@ G_DEFINE_TYPE (GsdXrandrManager, gsd_xrandr_manager, G_TYPE_OBJECT)
 static gpointer manager_object = NULL;
 
 static FILE *log_file;
+
+static GnomeRROutput * input_info_find_size_match (GsdXrandrManager *manager, GnomeRRScreen *rr_screen);
+static int map_touch_to_output (GnomeRRScreen *screen, int device_id, GnomeRROutputInfo *output);
+static void do_touchscreen_mapping (GsdXrandrManager *manager);
 
 static void
 log_open (void)
@@ -1818,6 +1825,12 @@ on_randr_event (GnomeRRScreen *screen, gpointer data)
                 use_stored_configuration_or_auto_configure_outputs (manager, config_timestamp);
         }
 
+        if (priv->main_touchscreen_id != -1) {
+                /* Set mapping of input devices onto displays */
+                log_msg ("\nSetting touchscreen mapping on RandR event\n");
+                do_touchscreen_mapping (manager);
+        }
+
         log_close ();
 }
 
@@ -2033,6 +2046,206 @@ power_client_changed_cb (UpClient *client, gpointer data)
         }
 }
 
+static gboolean
+matches_name (GnomeRROutputInfo *output, GnomeRROutput *to_match)
+{
+        return (g_strcmp0 (gnome_rr_output_info_get_name (output),
+                       gnome_rr_output_get_name (to_match) ) == 0);
+}
+
+static gint
+monitor_for_output (GnomeRROutput *output)
+{
+        GdkScreen *screen = gdk_screen_get_default ();
+        GnomeRRCrtc *crtc = gnome_rr_output_get_crtc (output);
+        gint x, y;
+
+        if (!crtc)
+                return -1;
+
+        gnome_rr_crtc_get_position (crtc, &x, &y);
+
+        return gdk_screen_get_monitor_at_point (screen, x, y);
+}
+
+static gboolean
+output_get_dimensions (GnomeRROutput *output,
+                       guint         *width,
+                       guint         *height)
+{
+        GdkScreen *screen = gdk_screen_get_default ();
+        gint monitor_num;
+
+        monitor_num = monitor_for_output (output);
+
+        if (monitor_num < 0)
+                return FALSE;
+
+        *width = gdk_screen_get_monitor_width_mm (screen, monitor_num);
+        *height = gdk_screen_get_monitor_height_mm (screen, monitor_num);
+        return TRUE;
+}
+
+static GnomeRROutput *
+input_info_find_size_match (GsdXrandrManager *manager, GnomeRRScreen *rr_screen)
+{
+        guint i, input_width, input_height, output_width, output_height;
+        gdouble min_width_diff, min_height_diff;
+        GnomeRROutput **outputs, *match = NULL;
+        GsdXrandrManagerPrivate *priv = manager->priv;
+
+        g_return_val_if_fail (rr_screen != NULL, NULL);
+
+        if (!xdevice_get_dimensions (priv->main_touchscreen_id,
+                                     &input_width, &input_height))
+                return NULL;
+
+        /* Restrict the matches to be below a narrow percentage */
+        min_width_diff = min_height_diff = 0.05;
+
+        g_debug ("Input device '%s' has %dx%d mm",
+                 priv->main_touchscreen_name, input_width, input_height);
+
+        outputs = gnome_rr_screen_list_outputs (rr_screen);
+
+        for (i = 0; outputs[i] != NULL; i++) {
+                gdouble width_diff, height_diff;
+                if (!output_get_dimensions (outputs[i], &output_width, &output_height))
+                        continue;
+
+                width_diff = ABS (1 - ((gdouble) output_width / input_width));
+                height_diff = ABS (1 - ((gdouble) output_height / input_height));
+
+                g_debug ("Output '%s' has size %dx%d mm, deviation from "
+                         "input device size: %.2f width, %.2f height ",
+                         gnome_rr_output_get_name (outputs[i]),
+                         output_width, output_height, width_diff, height_diff);
+
+                if (width_diff <= min_width_diff && height_diff <= min_height_diff) {
+                    match = outputs[i];
+                    min_width_diff = width_diff;
+                    min_height_diff = height_diff;
+                }
+        }
+
+        if (match) {
+                g_debug ("Output '%s' is considered a best size match (%.2f / %.2f)",
+                         gnome_rr_output_get_name (match),
+                         min_width_diff, min_height_diff);
+        } else {
+                g_debug ("No input/output size match was found\n");
+        }
+
+        return match;
+}
+
+static GnomeRROutputInfo *
+get_mappable_output_info (GsdXrandrManager *manager, GnomeRRScreen *screen, GnomeRRConfig *config)
+{
+        int i;
+        GnomeRROutputInfo **outputs = gnome_rr_config_get_outputs (config);
+
+        GnomeRROutput *size_match = NULL;
+
+        size_match = input_info_find_size_match (manager, screen);
+
+        for (i = 0; outputs[i] != NULL; i++) {
+                if (is_laptop (screen, outputs[i]) || (size_match && matches_name (outputs[i], size_match)))
+                        return outputs[i];
+        }
+
+        return NULL;
+}
+
+static void
+set_touchscreen_id (GsdXrandrManager *manager)
+{
+        GsdXrandrManagerPrivate *priv = manager->priv;
+        XDeviceInfo *device_info;
+        int n_devices;
+        int i;
+
+        device_info = XListInputDevices (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()),
+                                         &n_devices);
+        if (device_info == NULL)
+                return;
+
+        for (i = 0; i < n_devices; i++) {
+                if (device_info_is_touchscreen (&device_info[i])) {
+                    /* Let's deal only with the 1st touchscreen */
+                    priv->main_touchscreen_id = (int)device_info[i].id;
+                    priv->main_touchscreen_name = g_strdup (device_info[i].name);
+                    break;
+                }
+        }
+
+        XFreeDeviceList (device_info);
+}
+
+static int
+map_touch_to_output (GnomeRRScreen *screen, int device_id,
+                     GnomeRROutputInfo *output)
+{
+        int status = 0;
+        char command[100];
+        gchar *name = gnome_rr_output_info_get_name (output);
+
+        if (!name) {
+                g_debug ("Failure to map screen with missing name");
+                status = 1;
+                goto out;
+        }
+
+        if (gnome_rr_output_info_is_active(output)) {
+                g_debug ("Mapping touchscreen %d onto output %s",
+                         device_id, name);
+                sprintf (command, "xinput  --map-to-output %d %s",
+                         device_id, name);
+                status = system (command);
+        }
+        else {
+                g_debug ("No need to map %d onto output %s. The output is off",
+                         device_id, name);
+        }
+
+out:
+        return (status == 0);
+}
+
+static void
+do_touchscreen_mapping (GsdXrandrManager *manager)
+{
+        GsdXrandrManagerPrivate *priv = manager->priv;
+        GnomeRRScreen *screen = priv->rw_screen;
+        GnomeRRConfig *current;
+        GnomeRROutputInfo *laptop_output;
+
+        if (!supports_xinput_devices ())
+                return;
+
+        current = gnome_rr_config_new_current (screen, NULL);
+        laptop_output = get_mappable_output_info (manager, screen, current);
+
+        if (laptop_output == NULL) {
+                g_debug ("No laptop screen detected");
+                goto out;
+        }
+
+        if (priv->main_touchscreen_id != -1) {
+                /* Set initial mapping */
+                g_debug ("Setting initial touchscreen mapping");
+                map_touch_to_output (screen,
+                                     priv->main_touchscreen_id,
+                                     laptop_output);
+        }
+        else {
+                g_debug ("No main touchscreen detected");
+        }
+
+out:
+        g_object_unref (current);
+}
+
 gboolean
 gsd_xrandr_manager_start (GsdXrandrManager *manager,
                           GError          **error)
@@ -2070,6 +2283,10 @@ gsd_xrandr_manager_start (GsdXrandrManager *manager,
         if (!apply_stored_configuration_at_startup (manager, GDK_CURRENT_TIME)) /* we don't have a real timestamp at startup anyway */
                 if (!apply_default_configuration_from_file (manager, GDK_CURRENT_TIME))
                         apply_default_boot_configuration (manager, GDK_CURRENT_TIME);
+
+        /* Initialise touchscreen mapping */
+        set_touchscreen_id (manager);
+        do_touchscreen_mapping (manager);
 
         log_msg ("State of screen after initial configuration:\n");
         log_screen (manager->priv->rw_screen);
@@ -2127,6 +2344,8 @@ gsd_xrandr_manager_stop (GsdXrandrManager *manager)
         }
 #endif /* HAVE_WACOM */
 
+        g_free (manager->priv->main_touchscreen_name);
+
         log_open ();
         log_msg ("STOPPING XRANDR PLUGIN\n------------------------------------------------------------\n");
         log_close ();
@@ -2149,6 +2368,10 @@ gsd_xrandr_manager_init (GsdXrandrManager *manager)
 
         manager->priv->current_fn_f7_config = -1;
         manager->priv->fn_f7_configs = NULL;
+
+        /* For touchscreen mapping */
+        manager->priv->main_touchscreen_id = -1;
+        manager->priv->main_touchscreen_name = NULL;
 }
 
 static void
