@@ -2286,7 +2286,8 @@ gsd_xrandr_manager_start (GsdXrandrManager *manager,
 
         /* Initialise touchscreen mapping */
         set_touchscreen_id (manager);
-        do_touchscreen_mapping (manager);
+        if (manager->priv->main_touchscreen_id != -1)
+                do_touchscreen_mapping (manager);
 
         log_msg ("State of screen after initial configuration:\n");
         log_screen (manager->priv->rw_screen);
