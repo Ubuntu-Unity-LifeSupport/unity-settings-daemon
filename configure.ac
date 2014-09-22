@@ -55,6 +55,8 @@ LIBRSVG_REQUIRED_VERSION=2.36.2
 UPOWER_REQUIRED_VERSION=0.9.11
 IBUS_REQUIRED_VERSION=1.4.99
 GSETTINGS_DESKTOP_SCHEMAS_REQUIRED_VERSION=3.7.2.1
+XRANDR_REQUIRED_VERSION=1.3
+XEXT_REQUIRED_VERSION=1.1
 
 EXTRA_COMPILE_WARNINGS(yes)
 
@@ -138,6 +140,13 @@ dnl - common
 dnl ---------------------------------------------------------------------------
 
 PKG_CHECK_MODULES(COMMON, x11 kbproto xi)
+
+dnl ---------------------------------------------------------------------------
+dnl - libunity-settings-daemon
+dnl ---------------------------------------------------------------------------
+
+PKG_CHECK_MODULES(LIBUNITY_SETTINGS_DAEMON, gtk+-3.0 >= $GTK_REQUIRED_VERSION xrandr >= $XRANDR_REQUIRED_VERSION xext >= $XEXT_REQUIRED_VERSION)
+PKG_CHECK_MODULES(CHECK_GL_TEXTURE_SIZE, gl x11)
 
 dnl ---------------------------------------------------------------------------
 dnl - automount
@@ -521,6 +530,7 @@ plugins/xsettings/Makefile
 data/Makefile
 data/unity-settings-daemon.pc
 data/unity-settings-daemon-uninstalled.pc
+data/libunity-settings-daemon.pc
 po/Makefile.in
 man/Makefile
 tests/Makefile

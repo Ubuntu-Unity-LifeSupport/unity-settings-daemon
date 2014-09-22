@@ -38,12 +38,10 @@
 #include <X11/Xatom.h>
 #include <X11/extensions/Xfixes.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-idle-monitor.h>
-
 #include "gnome-settings-profile.h"
 #include "gsd-cursor-manager.h"
 #include "gsd-input-helper.h"
+#include "gsd-idle-monitor.h"
 
 #define XFIXES_CURSOR_HIDING_MAJOR 4
 
@@ -126,9 +124,9 @@ set_cursor_visibility (GsdCursorManager *manager,
 }
 
 static void
-monitor_became_active (GnomeIdleMonitor *monitor,
-                       guint             watch_id,
-                       gpointer          user_data)
+monitor_became_active (GsdIdleMonitor *monitor,
+                       guint           watch_id,
+                       gpointer        user_data)
 {
         GdkDevice *device;
         GsdCursorManager *manager = GSD_CURSOR_MANAGER (user_data);
@@ -155,7 +153,7 @@ add_device (GdkDeviceManager *device_manager,
             GsdCursorManager *manager,
             GError          **error)
 {
-        GnomeIdleMonitor *monitor;
+        GsdIdleMonitor *monitor;
 
         if (g_hash_table_lookup (manager->priv->monitors, device) != NULL)
                 return TRUE;
@@ -167,7 +165,7 @@ add_device (GdkDeviceManager *device_manager,
                 return TRUE;
 
         /* Create IdleMonitors for each pointer device */
-        monitor = gnome_idle_monitor_new_for_device (device);
+        monitor = gsd_idle_monitor_new_for_device (device);
         if (!monitor) {
                 g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED,
                              "Per-device idletime monitor not available");
@@ -176,10 +174,10 @@ add_device (GdkDeviceManager *device_manager,
         g_hash_table_insert (manager->priv->monitors,
                              device,
                              monitor);
-        gnome_idle_monitor_add_user_active_watch (monitor,
-                                                  monitor_became_active,
-                                                  manager,
-                                                  NULL);
+        gsd_idle_monitor_add_user_active_watch (monitor,
+                                                monitor_became_active,
+                                                manager,
+                                                NULL);
 
         return TRUE;
 }

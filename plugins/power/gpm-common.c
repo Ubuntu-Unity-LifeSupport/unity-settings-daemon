@@ -32,13 +32,11 @@
 #include <X11/extensions/dpms.h>
 #include <canberra-gtk.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-rr.h>
-
 #include "gpm-common.h"
 #include "gsd-power-constants.h"
 #include "gsd-power-manager.h"
 #include "gsd-backlight-linux.h"
+#include "gsd-rr.h"
 
 #define XSCREENSAVER_WATCHDOG_TIMEOUT           120 /* seconds */
 #define UPS_SOUND_LOOP_ID                        99
@@ -1165,23 +1163,23 @@ gsd_power_enable_screensaver_watchdog (void)
                                       NULL);
 }
 
-static GnomeRROutput *
-get_primary_output (GnomeRRScreen *rr_screen)
+static GsdRROutput *
+get_primary_output (GsdRRScreen *rr_screen)
 {
-        GnomeRROutput *output = NULL;
-        GnomeRROutput **outputs;
+        GsdRROutput *output = NULL;
+        GsdRROutput **outputs;
         guint i;
 
         /* search all X11 outputs for the device id */
-        outputs = gnome_rr_screen_list_outputs (rr_screen);
+        outputs = gsd_rr_screen_list_outputs (rr_screen);
         if (outputs == NULL)
                 goto out;
 
         for (i = 0; outputs[i] != NULL; i++) {
-                if (gnome_rr_output_is_connected (outputs[i]) &&
-                    gnome_rr_output_is_laptop (outputs[i]) &&
-                    gnome_rr_output_get_backlight_min (outputs[i]) >= 0 &&
-                    gnome_rr_output_get_backlight_max (outputs[i]) > 0) {
+                if (gsd_rr_output_is_connected (outputs[i]) &&
+                    gsd_rr_output_is_laptop (outputs[i]) &&
+                    gsd_rr_output_get_backlight_min (outputs[i]) >= 0 &&
+                    gsd_rr_output_get_backlight_max (outputs[i]) > 0) {
                         output = outputs[i];
                         break;
                 }
@@ -1239,7 +1237,7 @@ backlight_get_mock_value (const char *argument)
 #endif /* GSD_MOCK */
 
 gboolean
-backlight_available (GnomeRRScreen *rr_screen)
+backlight_available (GsdRRScreen *rr_screen)
 {
         char *path;
 
@@ -1400,14 +1398,14 @@ out:
 }
 
 int
-backlight_get_abs (GnomeRRScreen *rr_screen, GError **error)
+backlight_get_abs (GsdRRScreen *rr_screen, GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
 
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
-                return gnome_rr_output_get_backlight (output,
+                return gsd_rr_output_get_backlight (output,
                                                       error);
         }
 
@@ -1416,9 +1414,9 @@ backlight_get_abs (GnomeRRScreen *rr_screen, GError **error)
 }
 
 int
-backlight_get_percentage (GnomeRRScreen *rr_screen, GError **error)
+backlight_get_percentage (GsdRRScreen *rr_screen, GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
         gint now;
         gint value = -1;
         gint min = 0;
@@ -1428,9 +1426,9 @@ backlight_get_percentage (GnomeRRScreen *rr_screen, GError **error)
         output = get_primary_output (rr_screen);
         if (output != NULL) {
 
-                min = gnome_rr_output_get_backlight_min (output);
-                max = gnome_rr_output_get_backlight_max (output);
-                now = gnome_rr_output_get_backlight (output, error);
+                min = gsd_rr_output_get_backlight_min (output);
+                max = gsd_rr_output_get_backlight_max (output);
+                now = gsd_rr_output_get_backlight (output, error);
                 if (now < 0)
                         goto out;
                 value = ABS_TO_PERCENTAGE (min, max, now);
@@ -1450,9 +1448,9 @@ out:
 }
 
 int
-backlight_get_min (GnomeRRScreen *rr_screen)
+backlight_get_min (GsdRRScreen *rr_screen)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
 
         /* if we have no xbacklight device, then hardcode zero as sysfs
          * offsets everything to 0 as min */
@@ -1461,19 +1459,19 @@ backlight_get_min (GnomeRRScreen *rr_screen)
                 return 0;
 
         /* get xbacklight value, which maybe non-zero */
-        return gnome_rr_output_get_backlight_min (output);
+        return gsd_rr_output_get_backlight_min (output);
 }
 
 int
-backlight_get_max (GnomeRRScreen *rr_screen, GError **error)
+backlight_get_max (GsdRRScreen *rr_screen, GError **error)
 {
         gint value;
-        GnomeRROutput *output;
+        GsdRROutput *output;
 
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
-                value = gnome_rr_output_get_backlight_max (output);
+                value = gsd_rr_output_get_backlight_max (output);
                 if (value < 0) {
                         g_set_error (error,
                                      GSD_POWER_MANAGER_ERROR,
@@ -1488,11 +1486,11 @@ backlight_get_max (GnomeRRScreen *rr_screen, GError **error)
 }
 
 gboolean
-backlight_set_percentage (GnomeRRScreen *rr_screen,
+backlight_set_percentage (GsdRRScreen *rr_screen,
                           guint value,
                           GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
         gboolean ret = FALSE;
         gint min = 0;
         gint max;
@@ -1501,14 +1499,14 @@ backlight_set_percentage (GnomeRRScreen *rr_screen,
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
-                min = gnome_rr_output_get_backlight_min (output);
-                max = gnome_rr_output_get_backlight_max (output);
+                min = gsd_rr_output_get_backlight_min (output);
+                max = gsd_rr_output_get_backlight_max (output);
                 if (min < 0 || max < 0) {
                         g_warning ("no xrandr backlight capability");
                         return ret;
                 }
                 discrete = PERCENTAGE_TO_ABS (min, max, value);
-                ret = gnome_rr_output_set_backlight (output,
+                ret = gsd_rr_output_set_backlight (output,
                                                      discrete,
                                                      error);
                 return ret;
@@ -1527,9 +1525,9 @@ backlight_set_percentage (GnomeRRScreen *rr_screen,
 }
 
 int
-backlight_step_up (GnomeRRScreen *rr_screen, GError **error)
+backlight_step_up (GsdRRScreen *rr_screen, GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
         gboolean ret = FALSE;
         gint percentage_value = -1;
         gint min = 0;
@@ -1537,29 +1535,29 @@ backlight_step_up (GnomeRRScreen *rr_screen, GError **error)
         gint now;
         gint step;
         guint discrete;
-        GnomeRRCrtc *crtc;
+        GsdRRCrtc *crtc;
 
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
 
-                crtc = gnome_rr_output_get_crtc (output);
+                crtc = gsd_rr_output_get_crtc (output);
                 if (crtc == NULL) {
                         g_set_error (error,
                                      GSD_POWER_MANAGER_ERROR,
                                      GSD_POWER_MANAGER_ERROR_FAILED,
                                      "no crtc for %s",
-                                     gnome_rr_output_get_name (output));
+                                     gsd_rr_output_get_name (output));
                         return percentage_value;
                 }
-                min = gnome_rr_output_get_backlight_min (output);
-                max = gnome_rr_output_get_backlight_max (output);
-                now = gnome_rr_output_get_backlight (output, error);
+                min = gsd_rr_output_get_backlight_min (output);
+                max = gsd_rr_output_get_backlight_max (output);
+                now = gsd_rr_output_get_backlight (output, error);
                 if (now < 0)
                        return percentage_value;
                 step = BRIGHTNESS_STEP_AMOUNT (max - min + 1);
                 discrete = MIN (now + step, max);
-                ret = gnome_rr_output_set_backlight (output,
+                ret = gsd_rr_output_set_backlight (output,
                                                      discrete,
                                                      error);
                 if (ret)
@@ -1586,9 +1584,9 @@ backlight_step_up (GnomeRRScreen *rr_screen, GError **error)
 }
 
 int
-backlight_step_down (GnomeRRScreen *rr_screen, GError **error)
+backlight_step_down (GsdRRScreen *rr_screen, GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
         gboolean ret = FALSE;
         gint percentage_value = -1;
         gint min = 0;
@@ -1596,29 +1594,29 @@ backlight_step_down (GnomeRRScreen *rr_screen, GError **error)
         gint now;
         gint step;
         guint discrete;
-        GnomeRRCrtc *crtc;
+        GsdRRCrtc *crtc;
 
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
 
-                crtc = gnome_rr_output_get_crtc (output);
+                crtc = gsd_rr_output_get_crtc (output);
                 if (crtc == NULL) {
                         g_set_error (error,
                                      GSD_POWER_MANAGER_ERROR,
                                      GSD_POWER_MANAGER_ERROR_FAILED,
                                      "no crtc for %s",
-                                     gnome_rr_output_get_name (output));
+                                     gsd_rr_output_get_name (output));
                         return percentage_value;
                 }
-                min = gnome_rr_output_get_backlight_min (output);
-                max = gnome_rr_output_get_backlight_max (output);
-                now = gnome_rr_output_get_backlight (output, error);
+                min = gsd_rr_output_get_backlight_min (output);
+                max = gsd_rr_output_get_backlight_max (output);
+                now = gsd_rr_output_get_backlight (output, error);
                 if (now < 0)
                        return percentage_value;
                 step = BRIGHTNESS_STEP_AMOUNT (max - min + 1);
                 discrete = MAX (now - step, 0);
-                ret = gnome_rr_output_set_backlight (output,
+                ret = gsd_rr_output_set_backlight (output,
                                                      discrete,
                                                      error);
                 if (ret)
@@ -1645,17 +1643,17 @@ backlight_step_down (GnomeRRScreen *rr_screen, GError **error)
 }
 
 int
-backlight_set_abs (GnomeRRScreen *rr_screen,
+backlight_set_abs (GsdRRScreen *rr_screen,
                    guint value,
                    GError **error)
 {
-        GnomeRROutput *output;
+        GsdRROutput *output;
         gboolean ret = FALSE;
 
         /* prefer xbacklight */
         output = get_primary_output (rr_screen);
         if (output != NULL) {
-                ret = gnome_rr_output_set_backlight (output,
+                ret = gsd_rr_output_set_backlight (output,
                                                      value,
                                                      error);
                 return ret;
@@ -1690,20 +1688,20 @@ reset_idletime (void)
 }
 
 static gboolean
-randr_output_is_on (GnomeRROutput *output)
+randr_output_is_on (GsdRROutput *output)
 {
-        GnomeRRCrtc *crtc;
+        GsdRRCrtc *crtc;
 
-        crtc = gnome_rr_output_get_crtc (output);
+        crtc = gsd_rr_output_get_crtc (output);
         if (!crtc)
                 return FALSE;
-        return gnome_rr_crtc_get_current_mode (crtc) != NULL;
+        return gsd_rr_crtc_get_current_mode (crtc) != NULL;
 }
 
 gboolean
-external_monitor_is_connected (GnomeRRScreen *screen)
+external_monitor_is_connected (GsdRRScreen *screen)
 {
-        GnomeRROutput **outputs;
+        GsdRROutput **outputs;
         guint i;
 
 #ifdef GSD_MOCK
@@ -1724,10 +1722,10 @@ external_monitor_is_connected (GnomeRRScreen *screen)
 #endif /* GSD_MOCK */
 
         /* see if we have more than one screen plugged in */
-        outputs = gnome_rr_screen_list_outputs (screen);
+        outputs = gsd_rr_screen_list_outputs (screen);
         for (i = 0; outputs[i] != NULL; i++) {
                 if (randr_output_is_on (outputs[i]) &&
-                    !gnome_rr_output_is_laptop (outputs[i]))
+                    !gsd_rr_output_is_laptop (outputs[i]))
                         return TRUE;
         }
 

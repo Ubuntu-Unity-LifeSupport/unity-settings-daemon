@@ -1,3 +1,20 @@
+unity-settings-daemon (14.04.0+14.10.20140922-0ubuntu1) utopic; urgency=low
+
+  [ Robert Ancell ]
+  * Move libgnome-desktop RandR code into u-s-d since newer versions
+    remove this unstable API (LP: #1372240)
+
+  [ Rui Matos ]
+  * Apply git patch that pulls in code removed from gnome-desktop3 3.12
+
+  [ Bastien Nocera ]
+  * common: Check the exit status of hotplug scripts correctly
+
+  [ Tim Lunn ]
+  * Apply git patch that pulls in code removed from gnome-desktop3 3.12
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Mon, 22 Sep 2014 11:29:11 +0000
+
 unity-settings-daemon (14.04.0+14.10.20140605-0ubuntu2) utopic; urgency=medium
 
   * No-change rebuild against new colord

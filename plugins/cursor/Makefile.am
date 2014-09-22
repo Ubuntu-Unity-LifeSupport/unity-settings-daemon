@@ -25,6 +25,7 @@ libcursor_la_LDFLAGS =		\
 
 libcursor_la_LIBADD  =					\
 	$(top_builddir)/plugins/common/libcommon.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(CURSOR_LIBS)					\
 	$(SETTINGS_PLUGIN_LIBS)
 
@@ -52,6 +53,7 @@ usd_test_cursor_CFLAGS =			\
 usd_test_cursor_LDADD =						\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la		\
 	$(top_builddir)/plugins/common/libcommon.la		\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(SETTINGS_DAEMON_LIBS)			\
 	$(SETTINGS_PLUGIN_LIBS)			\
 	$(CURSOR_LIBS)			\

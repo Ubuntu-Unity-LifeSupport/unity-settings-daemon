@@ -16,7 +16,7 @@ unity-settings-daemon.desktop.in: unity-settings-daemon.desktop.in.in
 	$(AM_V_GEN) sed -e "s|\@libexecdir\@|$(libexecdir)|" $< > $@.tmp && mv $@.tmp $@
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = unity-settings-daemon.pc
+pkgconfig_DATA = unity-settings-daemon.pc libunity-settings-daemon.pc
 
 @INTLTOOL_XML_NOMERGE_RULE@
 
@@ -25,6 +25,7 @@ EXTRA_DIST = 					\
 	$(desktop_in_files)			\
 	$(gsettings_ENUM_FILES)			\
 	unity-settings-daemon.pc.in		\
+	libunity-settings-daemon.pc.in		\
 	$(api_DATA)				\
 	$(NULL)
 

@@ -30,13 +30,11 @@
 #include <glib-object.h>
 #include <gio/gio.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-pnp-ids.h>
-
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-plugin-info.h"
 #include "gnome-settings-manager.h"
 #include "gnome-settings-profile.h"
+#include "gsd-pnp-ids.h"
 
 #define DEFAULT_SETTINGS_PREFIX "org.gnome.settings-daemon"
 
@@ -64,7 +62,7 @@ struct GnomeSettingsManagerPrivate
         GDBusConnection            *connection;
         GSettings                  *settings;
         char                      **whitelist;
-        GnomePnpIds                *pnp_ids;
+        GsdPnpIds                  *pnp_ids;
         GSList                     *plugins;
 };
 
@@ -399,7 +397,7 @@ gnome_settings_manager_start (GnomeSettingsManager *manager,
         }
 
         g_debug ("loading PNPIDs");
-        manager->priv->pnp_ids = gnome_pnp_ids_new ();
+        manager->priv->pnp_ids = gsd_pnp_ids_new ();
 
         gnome_settings_profile_start ("initializing plugins");
         manager->priv->settings = g_settings_new (DEFAULT_SETTINGS_PREFIX ".plugins");

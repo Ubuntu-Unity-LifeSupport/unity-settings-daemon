@@ -6,7 +6,7 @@ include /usr/share/cdbs/1/class/gnome.mk
 
 LDFLAGS += -Wl,-O1 -Wl,-z,defs -Wl,--warn-unresolved-symbols -Wl,--as-needed
 
-DEB_DH_MAKESHLIBS_ARGS_ALL += --no-act
+DEB_DH_MAKESHLIBS_ARGS_ALL += -X/usr/lib/unity-settings-daemon-1.0
 DEB_CONFIGURE_SCRIPT := ./autogen.sh
 DEB_CONFIGURE_EXTRA_FLAGS = --enable-systemd --disable-packagekit --enable-ibus
 

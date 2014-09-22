@@ -30,13 +30,11 @@
 #include <gdk/gdkx.h>
 #include <gudev/gudev.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-rr.h>
-
 #include "gsd-input-helper.h"
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
 #include "gsd-orientation-manager.h"
+#include "gsd-rr.h"
 
 typedef enum {
         ORIENTATION_UNDEFINED,
@@ -137,18 +135,18 @@ gsd_orientation_manager_init (GsdOrientationManager *manager)
         manager->priv->prev_orientation = ORIENTATION_UNDEFINED;
 }
 
-static GnomeRRRotation
+static GsdRRRotation
 orientation_to_rotation (OrientationUp    orientation)
 {
         switch (orientation) {
         case ORIENTATION_NORMAL:
-                return GNOME_RR_ROTATION_0;
+                return GSD_RR_ROTATION_0;
         case ORIENTATION_BOTTOM_UP:
-                return GNOME_RR_ROTATION_180;
+                return GSD_RR_ROTATION_180;
         case ORIENTATION_LEFT_UP:
-                return GNOME_RR_ROTATION_90;
+                return GSD_RR_ROTATION_90;
         case ORIENTATION_RIGHT_UP:
-                return GNOME_RR_ROTATION_270;
+                return GSD_RR_ROTATION_270;
         default:
                 g_assert_not_reached ();
         }
@@ -228,7 +226,7 @@ on_xrandr_action_call_finished (GObject               *source_object,
 
 static void
 do_xrandr_action (GsdOrientationManager *manager,
-                  GnomeRRRotation        rotation)
+                  GsdRRRotation        rotation)
 {
         GsdOrientationManagerPrivate *priv = manager->priv;
         GTimeVal tv;
@@ -262,7 +260,7 @@ do_xrandr_action (GsdOrientationManager *manager,
 static void
 do_rotation (GsdOrientationManager *manager)
 {
-        GnomeRRRotation rotation;
+        GsdRRRotation rotation;
 
         if (manager->priv->orientation_lock) {
                 g_debug ("Orientation changed, but we are locked");

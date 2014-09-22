@@ -38,8 +38,6 @@
 #include <X11/extensions/XTest.h>
 #include <X11/keysym.h>
 #include <Xwacom.h>
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-rr.h>
 
 #include "gsd-enums.h"
 #include "gsd-input-helper.h"
@@ -48,6 +46,7 @@
 #include "gsd-wacom-manager.h"
 #include "gsd-wacom-device.h"
 #include "gsd-wacom-osd-window.h"
+#include "gsd-rr.h"
 
 #define GSD_WACOM_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_WACOM_MANAGER, GsdWacomManagerPrivate))
 
@@ -1371,7 +1370,7 @@ gsd_wacom_manager_idle_cb (GsdWacomManager *manager)
  * position of the monitors attached to the screen change.
  */
 static void
-on_screen_changed_cb (GnomeRRScreen *rr_screen,
+on_screen_changed_cb (GsdRRScreen *rr_screen,
 		      GsdWacomManager *manager)
 {
 	GList *devices, *l;
@@ -1417,7 +1416,7 @@ init_screens (GsdWacomManager *manager)
         for (i = 0; i < gdk_display_get_n_screens (display); i++) {
                 GError *error = NULL;
                 GdkScreen *screen;
-                GnomeRRScreen *rr_screen;
+                GsdRRScreen *rr_screen;
 
                 screen = gdk_display_get_screen (display, i);
                 if (screen == NULL) {
@@ -1426,12 +1425,12 @@ init_screens (GsdWacomManager *manager)
                 manager->priv->screens = g_slist_append (manager->priv->screens, screen);
 
 		/*
-		 * We also keep a list of GnomeRRScreen to monitor changes such as rotation
+		 * We also keep a list of GsdRRScreen to monitor changes such as rotation
 		 * which are not reported by Gdk's "monitors-changed" callback
 		 */
-		rr_screen = gnome_rr_screen_new (screen, &error);
+		rr_screen = gsd_rr_screen_new (screen, &error);
 		if (rr_screen == NULL) {
-			g_warning ("Failed to create GnomeRRScreen: %s", error->message);
+			g_warning ("Failed to create GsdRRScreen: %s", error->message);
 			g_error_free (error);
 			continue;
 		}

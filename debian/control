@@ -40,7 +40,10 @@ Build-Depends: cdbs,
                libgnomekbd-dev (>= 3.5.1),
                libxklavier-dev,
                libsystemd-login-dev (>= 183),
-               libibus-1.0-dev (>= 1.5.0)
+               libibus-1.0-dev (>= 1.5.0),
+               libgl1-mesa-dev,
+               libxkbfile-dev,
+               xkb-data,
 Standards-Version: 3.9.3
 
 Package: unity-settings-daemon
@@ -95,3 +98,20 @@ Depends: ${shlibs:Depends},
 Description: Headers for building applications communicating with unity-settings-daemon
  This package contains header files required to build applications that
  communicate with the Unity settings daemon over D-Bus.
+
+Package: libunity-settings-daemon1
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libglib2.0-dev,
+         libgtk-3-dev
+Description: Helper library for accessing settings
+ This package contains a helper library for unity-control-center
+
+Package: libunity-settings-daemon-dev
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libunity-settings-daemon1 (= ${binary:Version})
+Description: Helper library for accessing settings (development files)
+ This package contains a headers for using libunity-settings-daemon

@@ -25,6 +25,8 @@
 #include <glib.h>
 #include <libupower-glib/upower.h>
 
+#include "gsd-rr.h"
+
 G_BEGIN_DECLS
 
 /* UPower helpers */
@@ -54,22 +56,22 @@ void             reset_idletime                         (void);
 #define PERCENTAGE_TO_ABS(min, max, value) (min + (((max - min) * value) / 100))
 
 int              gsd_power_backlight_abs_to_percentage  (int min, int max, int value);
-gboolean         backlight_available                    (GnomeRRScreen *rr_screen);
-int              backlight_get_abs                      (GnomeRRScreen *rr_screen, GError **error);
-int              backlight_get_percentage               (GnomeRRScreen *rr_screen, GError **error);
-int              backlight_get_min                      (GnomeRRScreen *rr_screen);
-int              backlight_get_max                      (GnomeRRScreen *rr_screen, GError **error);
-gboolean         backlight_set_percentage               (GnomeRRScreen *rr_screen,
+gboolean         backlight_available                    (GsdRRScreen *rr_screen);
+int              backlight_get_abs                      (GsdRRScreen *rr_screen, GError **error);
+int              backlight_get_percentage               (GsdRRScreen *rr_screen, GError **error);
+int              backlight_get_min                      (GsdRRScreen *rr_screen);
+int              backlight_get_max                      (GsdRRScreen *rr_screen, GError **error);
+gboolean         backlight_set_percentage               (GsdRRScreen *rr_screen,
                                                          guint value,
                                                          GError **error);
-int              backlight_step_up                      (GnomeRRScreen *rr_screen, GError **error);
-int              backlight_step_down                    (GnomeRRScreen *rr_screen, GError **error);
-int              backlight_set_abs                      (GnomeRRScreen *rr_screen,
+int              backlight_step_up                      (GsdRRScreen *rr_screen, GError **error);
+int              backlight_step_down                    (GsdRRScreen *rr_screen, GError **error);
+int              backlight_set_abs                      (GsdRRScreen *rr_screen,
                                                          guint value,
                                                          GError **error);
 
 /* RandR helpers */
-gboolean         external_monitor_is_connected          (GnomeRRScreen *screen);
+gboolean         external_monitor_is_connected          (GsdRRScreen *screen);
 
 /* Sound helpers */
 void             play_loop_start                        (guint *id);

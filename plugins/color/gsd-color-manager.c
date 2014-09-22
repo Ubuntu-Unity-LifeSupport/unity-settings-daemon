@@ -29,9 +29,6 @@
 #include <lcms2.h>
 #include <canberra-gtk.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-rr.h>
-
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
 #include "gnome-settings-session.h"
@@ -39,6 +36,7 @@
 #include "gcm-profile-store.h"
 #include "gcm-dmi.h"
 #include "gcm-edid.h"
+#include "gsd-rr.h"
 
 #define GSD_COLOR_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_COLOR_MANAGER, GsdColorManagerPrivate))
 
@@ -53,7 +51,7 @@ struct GsdColorManagerPrivate
         GSettings       *settings;
         GcmProfileStore *profile_store;
         GcmDmi          *dmi;
-        GnomeRRScreen   *x11_screen;
+        GsdRRScreen   *x11_screen;
         GHashTable      *edid_cache;
         GdkWindow       *gdk_window;
         gboolean         session_is_active;
@@ -80,7 +78,7 @@ typedef struct {
         guint32          red;
         guint32          green;
         guint32          blue;
-} GnomeRROutputClutItem;
+} GsdRROutputClutItem;
 
 GQuark
 gsd_color_manager_error_quark (void)
@@ -92,7 +90,7 @@ gsd_color_manager_error_quark (void)
 }
 
 static GcmEdid *
-gcm_session_get_output_edid (GsdColorManager *manager, GnomeRROutput *output, GError **error)
+gcm_session_get_output_edid (GsdColorManager *manager, GsdRROutput *output, GError **error)
 {
         const guint8 *data;
         gsize size;
@@ -101,18 +99,18 @@ gcm_session_get_output_edid (GsdColorManager *manager, GnomeRROutput *output, GE
 
         /* can we find it in the cache */
         edid = g_hash_table_lookup (manager->priv->edid_cache,
-                                    gnome_rr_output_get_name (output));
+                                    gsd_rr_output_get_name (output));
         if (edid != NULL) {
                 g_object_ref (edid);
                 goto out;
         }
 
         /* parse edid */
-        data = gnome_rr_output_get_edid_data (output, &size);
+        data = gsd_rr_output_get_edid_data (output, &size);
         if (data == NULL || size == 0) {
                 g_set_error_literal (error,
-                                     GNOME_RR_ERROR,
-                                     GNOME_RR_ERROR_UNKNOWN,
+                                     GSD_RR_ERROR,
+                                     GSD_RR_ERROR_UNKNOWN,
                                      "unable to get EDID for output");
                 goto out;
         }
@@ -126,7 +124,7 @@ gcm_session_get_output_edid (GsdColorManager *manager, GnomeRROutput *output, GE
 
         /* add to cache */
         g_hash_table_insert (manager->priv->edid_cache,
-                             g_strdup (gnome_rr_output_get_name (output)),
+                             g_strdup (gsd_rr_output_get_name (output)),
                              g_object_ref (edid));
 out:
         return edid;
@@ -175,7 +173,7 @@ out:
 }
 
 static gchar *
-gcm_session_get_output_id (GsdColorManager *manager, GnomeRROutput *output)
+gcm_session_get_output_id (GsdColorManager *manager, GsdRROutput *output)
 {
         const gchar *name;
         const gchar *serial;
@@ -191,12 +189,12 @@ gcm_session_get_output_id (GsdColorManager *manager, GnomeRROutput *output)
         edid = gcm_session_get_output_edid (manager, output, &error);
         if (edid == NULL) {
                 g_debug ("no edid for %s [%s], falling back to connection name",
-                         gnome_rr_output_get_name (output),
+                         gsd_rr_output_get_name (output),
                          error->message);
                 g_error_free (error);
                 g_string_append_printf (device_id,
                                         "-%s",
-                                        gnome_rr_output_get_name (output));
+                                        gsd_rr_output_get_name (output));
                 goto out;
         }
 
@@ -206,10 +204,10 @@ gcm_session_get_output_id (GsdColorManager *manager, GnomeRROutput *output)
         serial = gcm_edid_get_serial_number (edid);
         if (vendor == NULL && name == NULL && serial == NULL) {
                 g_debug ("edid invalid for %s, falling back to connection name",
-                         gnome_rr_output_get_name (output));
+                         gsd_rr_output_get_name (output));
                 g_string_append_printf (device_id,
                                         "-%s",
-                                        gnome_rr_output_get_name (output));
+                                        gsd_rr_output_get_name (output));
                 goto out;
         }
 
@@ -556,7 +554,7 @@ out:
 static GPtrArray *
 gcm_session_generate_vcgt (CdProfile *profile, guint size)
 {
-        GnomeRROutputClutItem *tmp;
+        GsdRROutputClutItem *tmp;
         GPtrArray *array = NULL;
         const cmsToneCurve **vcgt;
         cmsFloat32Number in;
@@ -589,7 +587,7 @@ gcm_session_generate_vcgt (CdProfile *profile, guint size)
         array = g_ptr_array_new_with_free_func (g_free);
         for (i = 0; i < size; i++) {
                 in = (gdouble) i / (gdouble) (size - 1);
-                tmp = g_new0 (GnomeRROutputClutItem, 1);
+                tmp = g_new0 (GsdRROutputClutItem, 1);
                 tmp->red = cmsEvalToneCurveFloat(vcgt[0], in) * (gdouble) 0xffff;
                 tmp->green = cmsEvalToneCurveFloat(vcgt[1], in) * (gdouble) 0xffff;
                 tmp->blue = cmsEvalToneCurveFloat(vcgt[2], in) * (gdouble) 0xffff;
@@ -602,22 +600,22 @@ out:
 }
 
 static guint
-gnome_rr_output_get_gamma_size (GnomeRROutput *output)
+gsd_rr_output_get_gamma_size (GsdRROutput *output)
 {
-        GnomeRRCrtc *crtc;
+        GsdRRCrtc *crtc;
         gint len = 0;
 
-        crtc = gnome_rr_output_get_crtc (output);
+        crtc = gsd_rr_output_get_crtc (output);
         if (crtc == NULL)
                 return 0;
-        gnome_rr_crtc_get_gamma (crtc,
+        gsd_rr_crtc_get_gamma (crtc,
                                  &len,
                                  NULL, NULL, NULL);
         return (guint) len;
 }
 
 static gboolean
-gcm_session_output_set_gamma (GnomeRROutput *output,
+gcm_session_output_set_gamma (GsdRROutput *output,
                               GPtrArray *array,
                               GError **error)
 {
@@ -626,8 +624,8 @@ gcm_session_output_set_gamma (GnomeRROutput *output,
         guint16 *green = NULL;
         guint16 *blue = NULL;
         guint i;
-        GnomeRROutputClutItem *data;
-        GnomeRRCrtc *crtc;
+        GsdRROutputClutItem *data;
+        GsdRRCrtc *crtc;
 
         /* no length? */
         if (array->len == 0) {
@@ -651,17 +649,17 @@ gcm_session_output_set_gamma (GnomeRROutput *output,
         }
 
         /* send to LUT */
-        crtc = gnome_rr_output_get_crtc (output);
+        crtc = gsd_rr_output_get_crtc (output);
         if (crtc == NULL) {
                 ret = FALSE;
                 g_set_error (error,
                              GSD_COLOR_MANAGER_ERROR,
                              GSD_COLOR_MANAGER_ERROR_FAILED,
                              "failed to get ctrc for %s",
-                             gnome_rr_output_get_name (output));
+                             gsd_rr_output_get_name (output));
                 goto out;
         }
-        gnome_rr_crtc_set_gamma (crtc, array->len,
+        gsd_rr_crtc_set_gamma (crtc, array->len,
                                  red, green, blue);
 out:
         g_free (red);
@@ -671,7 +669,7 @@ out:
 }
 
 static gboolean
-gcm_session_device_set_gamma (GnomeRROutput *output,
+gcm_session_device_set_gamma (GsdRROutput *output,
                               CdProfile *profile,
                               GError **error)
 {
@@ -680,7 +678,7 @@ gcm_session_device_set_gamma (GnomeRROutput *output,
         GPtrArray *clut = NULL;
 
         /* create a lookup table */
-        size = gnome_rr_output_get_gamma_size (output);
+        size = gsd_rr_output_get_gamma_size (output);
         if (size == 0) {
                 ret = TRUE;
                 goto out;
@@ -705,7 +703,7 @@ out:
 }
 
 static gboolean
-gcm_session_device_reset_gamma (GnomeRROutput *output,
+gcm_session_device_reset_gamma (GsdRROutput *output,
                                 GError **error)
 {
         gboolean ret;
@@ -713,19 +711,19 @@ gcm_session_device_reset_gamma (GnomeRROutput *output,
         guint size;
         guint32 value;
         GPtrArray *clut;
-        GnomeRROutputClutItem *data;
+        GsdRROutputClutItem *data;
 
         /* create a linear ramp */
         g_debug ("falling back to dummy ramp");
         clut = g_ptr_array_new_with_free_func (g_free);
-        size = gnome_rr_output_get_gamma_size (output);
+        size = gsd_rr_output_get_gamma_size (output);
         if (size == 0) {
                 ret = TRUE;
                 goto out;
         }
         for (i = 0; i < size; i++) {
                 value = (i * 0xffff) / (size - 1);
-                data = g_new0 (GnomeRROutputClutItem, 1);
+                data = g_new0 (GsdRROutputClutItem, 1);
                 data->red = value;
                 data->green = value;
                 data->blue = value;
@@ -741,19 +739,19 @@ out:
         return ret;
 }
 
-static GnomeRROutput *
+static GsdRROutput *
 gcm_session_get_x11_output_by_id (GsdColorManager *manager,
                                   const gchar *device_id,
                                   GError **error)
 {
         gchar *output_id;
-        GnomeRROutput *output = NULL;
-        GnomeRROutput **outputs = NULL;
+        GsdRROutput *output = NULL;
+        GsdRROutput **outputs = NULL;
         guint i;
         GsdColorManagerPrivate *priv = manager->priv;
 
         /* search all X11 outputs for the device id */
-        outputs = gnome_rr_screen_list_outputs (priv->x11_screen);
+        outputs = gsd_rr_screen_list_outputs (priv->x11_screen);
         if (outputs == NULL) {
                 g_set_error_literal (error,
                                      GSD_COLOR_MANAGER_ERROR,
@@ -762,7 +760,7 @@ gcm_session_get_x11_output_by_id (GsdColorManager *manager,
                 goto out;
         }
         for (i = 0; outputs[i] != NULL && output == NULL; i++) {
-                if (!gnome_rr_output_is_connected (outputs[i]))
+                if (!gsd_rr_output_is_connected (outputs[i]))
                         continue;
                 output_id = gcm_session_get_output_id (manager, outputs[i]);
                 if (g_strcmp0 (output_id, device_id) == 0)
@@ -785,42 +783,42 @@ out:
  * "xrandr --auto" or when the version of RANDR is < 1.3 */
 static gboolean
 gcm_session_use_output_profile_for_screen (GsdColorManager *manager,
-                                           GnomeRROutput *output)
+                                           GsdRROutput *output)
 {
         gboolean has_laptop = FALSE;
         gboolean has_primary = FALSE;
-        GnomeRROutput **outputs;
-        GnomeRROutput *connected = NULL;
+        GsdRROutput **outputs;
+        GsdRROutput *connected = NULL;
         guint i;
 
         /* do we have any screens marked as primary */
-        outputs = gnome_rr_screen_list_outputs (manager->priv->x11_screen);
+        outputs = gsd_rr_screen_list_outputs (manager->priv->x11_screen);
         if (outputs == NULL || outputs[0] == NULL) {
                 g_warning ("failed to get outputs");
                 return FALSE;
         }
         for (i = 0; outputs[i] != NULL; i++) {
-                if (!gnome_rr_output_is_connected (outputs[i]))
+                if (!gsd_rr_output_is_connected (outputs[i]))
                         continue;
                 if (connected == NULL)
                         connected = outputs[i];
-                if (gnome_rr_output_get_is_primary (outputs[i]))
+                if (gsd_rr_output_get_is_primary (outputs[i]))
                         has_primary = TRUE;
-                if (gnome_rr_output_is_laptop (outputs[i]))
+                if (gsd_rr_output_is_laptop (outputs[i]))
                         has_laptop = TRUE;
         }
 
         /* we have an assigned primary device, are we that? */
         if (has_primary)
-                return gnome_rr_output_get_is_primary (output);
+                return gsd_rr_output_get_is_primary (output);
 
         /* choosing the internal panel is probably sane */
         if (has_laptop)
-                return gnome_rr_output_is_laptop (output);
+                return gsd_rr_output_is_laptop (output);
 
         /* we have to choose one, so go for the first connected device */
         if (connected != NULL)
-                return gnome_rr_output_get_id (connected) == gnome_rr_output_get_id (output);
+                return gsd_rr_output_get_id (connected) == gsd_rr_output_get_id (output);
 
         return FALSE;
 }
@@ -886,7 +884,7 @@ gcm_session_device_assign_profile_connect_cb (GObject *object,
         const gchar *filename;
         gboolean ret;
         GError *error = NULL;
-        GnomeRROutput *output;
+        GsdRROutput *output;
         guint brightness_percentage;
         GcmSessionAsyncHelper *helper = (GcmSessionAsyncHelper *) user_data;
         GsdColorManager *manager = GSD_COLOR_MANAGER (helper->manager);
@@ -904,9 +902,9 @@ gcm_session_device_assign_profile_connect_cb (GObject *object,
         filename = cd_profile_get_filename (profile);
         g_assert (filename != NULL);
 
-        /* get the output (can't save in helper as GnomeRROutput isn't
+        /* get the output (can't save in helper as GsdRROutput isn't
          * a GObject, just a pointer */
-        output = gnome_rr_screen_get_output_by_id (manager->priv->x11_screen,
+        output = gsd_rr_screen_get_output_by_id (manager->priv->x11_screen,
                                                    helper->output_id);
         if (output == NULL)
                 goto out;
@@ -915,7 +913,7 @@ gcm_session_device_assign_profile_connect_cb (GObject *object,
          * calibration brightness then set this new brightness */
         brightness_profile = cd_profile_get_metadata_item (profile,
                                                            CD_PROFILE_METADATA_SCREEN_BRIGHTNESS);
-        if (gnome_rr_output_is_laptop (output) &&
+        if (gsd_rr_output_is_laptop (output) &&
             brightness_profile != NULL) {
                 /* the percentage is stored in the profile metadata as
                  * a string, not ideal, but it's all we have... */
@@ -1023,7 +1021,7 @@ gcm_session_device_assign_connect_cb (GObject *object,
         gchar *autogen_filename = NULL;
         gchar *autogen_path = NULL;
         GcmEdid *edid = NULL;
-        GnomeRROutput *output = NULL;
+        GsdRROutput *output = NULL;
         GError *error = NULL;
         const gchar *xrandr_id;
         GcmSessionAsyncHelper *helper;
@@ -1052,7 +1050,7 @@ gcm_session_device_assign_connect_cb (GObject *object,
         g_debug ("need to assign display device %s",
                  cd_device_get_id (device));
 
-        /* get the GnomeRROutput for the device id */
+        /* get the GsdRROutput for the device id */
         xrandr_id = cd_device_get_id (device);
         output = gcm_session_get_x11_output_by_id (manager,
                                                    xrandr_id,
@@ -1105,7 +1103,7 @@ gcm_session_device_assign_connect_cb (GObject *object,
                          cd_device_get_id (device));
 
                 /* the default output? */
-                if (gnome_rr_output_get_is_primary (output)) {
+                if (gsd_rr_output_get_is_primary (output)) {
                         gdk_property_delete (priv->gdk_window,
                                              gdk_atom_intern_static_string ("_ICC_PROFILE"));
                         gdk_property_delete (priv->gdk_window,
@@ -1127,7 +1125,7 @@ gcm_session_device_assign_connect_cb (GObject *object,
 
         /* get properties */
         helper = g_new0 (GcmSessionAsyncHelper, 1);
-        helper->output_id = gnome_rr_output_get_id (output);
+        helper->output_id = gsd_rr_output_get_id (output);
         helper->manager = g_object_ref (manager);
         helper->device = g_object_ref (device);
         cd_profile_connect (profile,
@@ -1206,7 +1204,7 @@ gcm_session_create_device_cb (GObject *object,
 }
 
 static void
-gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
+gcm_session_add_x11_output (GsdColorManager *manager, GsdRROutput *output)
 {
         const gchar *edid_checksum = NULL;
         const gchar *model = NULL;
@@ -1228,7 +1226,7 @@ gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
         }
 
         /* prefer DMI data for the internal output */
-        ret = gnome_rr_output_is_laptop (output);
+        ret = gsd_rr_output_is_laptop (output);
         if (ret) {
                 model = gcm_dmi_get_name (priv->dmi);
                 vendor = gcm_dmi_get_vendor (priv->dmi);
@@ -1247,7 +1245,7 @@ gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
 
         /* ensure mandatory fields are set */
         if (model == NULL)
-                model = gnome_rr_output_get_name (output);
+                model = gsd_rr_output_get_name (output);
         if (vendor == NULL)
                 vendor = "unknown";
         if (serial == NULL)
@@ -1277,11 +1275,11 @@ gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
                              (gpointer) serial);
         g_hash_table_insert (device_props,
                              (gpointer) CD_DEVICE_METADATA_XRANDR_NAME,
-                             (gpointer) gnome_rr_output_get_name (output));
+                             (gpointer) gsd_rr_output_get_name (output));
 #if CD_CHECK_VERSION(0,1,25)
         g_hash_table_insert (device_props,
                              (gpointer) CD_DEVICE_METADATA_OUTPUT_PRIORITY,
-                             gnome_rr_output_get_is_primary (output) ?
+                             gsd_rr_output_get_is_primary (output) ?
                              (gpointer) CD_DEVICE_METADATA_OUTPUT_PRIORITY_PRIMARY :
                              (gpointer) CD_DEVICE_METADATA_OUTPUT_PRIORITY_SECONDARY);
 #endif
@@ -1295,7 +1293,7 @@ gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
 #if CD_CHECK_VERSION(0,1,27)
         /* set this so we can call the device a 'Laptop Screen' in the
          * control center main panel */
-        if (gnome_rr_output_is_laptop (output)) {
+        if (gsd_rr_output_is_laptop (output)) {
                 g_hash_table_insert (device_props,
                                      (gpointer) CD_DEVICE_PROPERTY_EMBEDDED,
                                      NULL);
@@ -1317,8 +1315,8 @@ gcm_session_add_x11_output (GsdColorManager *manager, GnomeRROutput *output)
 
 
 static void
-gnome_rr_screen_output_added_cb (GnomeRRScreen *screen,
-                                GnomeRROutput *output,
+gsd_rr_screen_output_added_cb (GsdRRScreen *screen,
+                                GsdRROutput *output,
                                 GsdColorManager *manager)
 {
         gcm_session_add_x11_output (manager, output);
@@ -1368,17 +1366,17 @@ gcm_session_screen_removed_find_device_cb (GObject *object, GAsyncResult *res, g
 }
 
 static void
-gnome_rr_screen_output_removed_cb (GnomeRRScreen *screen,
-                                   GnomeRROutput *output,
+gsd_rr_screen_output_removed_cb (GsdRRScreen *screen,
+                                   GsdRROutput *output,
                                    GsdColorManager *manager)
 {
         g_debug ("output %s removed",
-                 gnome_rr_output_get_name (output));
+                 gsd_rr_output_get_name (output));
         g_hash_table_remove (manager->priv->edid_cache,
-                             gnome_rr_output_get_name (output));
+                             gsd_rr_output_get_name (output));
         cd_client_find_device_by_property (manager->priv->client,
                                            CD_DEVICE_METADATA_XRANDR_NAME,
-                                           gnome_rr_output_get_name (output),
+                                           gsd_rr_output_get_name (output),
                                            NULL,
                                            gcm_session_screen_removed_find_device_cb,
                                            manager);
@@ -1443,27 +1441,27 @@ out:
  * has changed then different crtcs are going to be used.
  * See https://bugzilla.gnome.org/show_bug.cgi?id=660164 for an example */
 static void
-gnome_rr_screen_output_changed_cb (GnomeRRScreen *screen,
+gsd_rr_screen_output_changed_cb (GsdRRScreen *screen,
                                    GsdColorManager *manager)
 {
-        GnomeRROutput **outputs;
+        GsdRROutput **outputs;
         GsdColorManagerPrivate *priv = manager->priv;
         guint i;
 
         /* get X11 outputs */
-        outputs = gnome_rr_screen_list_outputs (priv->x11_screen);
+        outputs = gsd_rr_screen_list_outputs (priv->x11_screen);
         if (outputs == NULL) {
                 g_warning ("failed to get outputs");
                 return;
         }
         for (i = 0; outputs[i] != NULL; i++) {
-                if (!gnome_rr_output_is_connected (outputs[i]))
+                if (!gsd_rr_output_is_connected (outputs[i]))
                         continue;
 
                 /* get CdDevice for this output */
                 cd_client_find_device_by_property (manager->priv->client,
                                                    CD_DEVICE_METADATA_XRANDR_NAME,
-                                                   gnome_rr_output_get_name (outputs[i]),
+                                                   gsd_rr_output_get_name (outputs[i]),
                                                    NULL,
                                                    gcm_session_profile_gamma_find_device_cb,
                                                    manager);
@@ -1478,7 +1476,7 @@ gcm_session_client_connect_cb (GObject *source_object,
 {
         gboolean ret;
         GError *error = NULL;
-        GnomeRROutput **outputs;
+        GsdRROutput **outputs;
         guint i;
         GsdColorManager *manager = GSD_COLOR_MANAGER (user_data);
         GsdColorManagerPrivate *priv = manager->priv;
@@ -1505,7 +1503,7 @@ gcm_session_client_connect_cb (GObject *source_object,
         gcm_profile_store_search (priv->profile_store);
 
         /* add screens */
-        gnome_rr_screen_refresh (priv->x11_screen, &error);
+        gsd_rr_screen_refresh (priv->x11_screen, &error);
         if (error != NULL) {
                 g_warning ("failed to refresh: %s", error->message);
                 g_error_free (error);
@@ -1513,25 +1511,25 @@ gcm_session_client_connect_cb (GObject *source_object,
         }
 
         /* get X11 outputs */
-        outputs = gnome_rr_screen_list_outputs (priv->x11_screen);
+        outputs = gsd_rr_screen_list_outputs (priv->x11_screen);
         if (outputs == NULL) {
                 g_warning ("failed to get outputs");
                 goto out;
         }
         for (i = 0; outputs[i] != NULL; i++) {
-                if (gnome_rr_output_is_connected (outputs[i]))
+                if (gsd_rr_output_is_connected (outputs[i]))
                         gcm_session_add_x11_output (manager, outputs[i]);
         }
 
         /* only connect when colord is awake */
         g_signal_connect (priv->x11_screen, "output-connected",
-                          G_CALLBACK (gnome_rr_screen_output_added_cb),
+                          G_CALLBACK (gsd_rr_screen_output_added_cb),
                           manager);
         g_signal_connect (priv->x11_screen, "output-disconnected",
-                          G_CALLBACK (gnome_rr_screen_output_removed_cb),
+                          G_CALLBACK (gsd_rr_screen_output_removed_cb),
                           manager);
         g_signal_connect (priv->x11_screen, "changed",
-                          G_CALLBACK (gnome_rr_screen_output_changed_cb),
+                          G_CALLBACK (gsd_rr_screen_output_changed_cb),
                           manager);
 
         g_signal_connect (priv->client, "device-added",
@@ -1560,7 +1558,7 @@ gsd_color_manager_start (GsdColorManager *manager,
         gnome_settings_profile_start (NULL);
 
         /* coldplug the list of screens */
-        priv->x11_screen = gnome_rr_screen_new (gdk_screen_get_default (), error);
+        priv->x11_screen = gsd_rr_screen_new (gdk_screen_get_default (), error);
         if (priv->x11_screen == NULL)
                 goto out;
 

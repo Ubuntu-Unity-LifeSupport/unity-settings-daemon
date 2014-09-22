@@ -40,6 +40,7 @@ libpower_la_LDFLAGS = 					\
 libpower_la_LIBADD  = 					\
 	$(top_builddir)/plugins/common/libcommon.la	\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la \
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la \
 	$(POWER_LIBS)					\
 	$(SETTINGS_PLUGIN_LIBS)
 
@@ -81,6 +82,7 @@ usd_test_power_LDADD =					\
 	-lm						\
 	$(top_builddir)/plugins/common/libcommon.la	\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la \
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la \
 	$(POWER_LIBS)					\
 	$(SETTINGS_PLUGIN_LIBS)
 
