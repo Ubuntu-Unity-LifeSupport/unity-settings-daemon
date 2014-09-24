@@ -102,16 +102,17 @@ Description: Headers for building applications communicating with unity-settings
 Package: libunity-settings-daemon1
 Architecture: any
 Depends: ${shlibs:Depends},
-         ${misc:Depends},
-         libglib2.0-dev,
-         libgtk-3-dev
+         ${misc:Depends}
 Description: Helper library for accessing settings
  This package contains a helper library for unity-control-center
 
 Package: libunity-settings-daemon-dev
+Section: libdevel
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         libunity-settings-daemon1 (= ${binary:Version})
+         libunity-settings-daemon1 (= ${binary:Version}),
+         libglib2.0-dev,
+         libgtk-3-dev
 Description: Helper library for accessing settings (development files)
  This package contains a headers for using libunity-settings-daemon
