@@ -1,3 +1,12 @@
+unity-settings-daemon (14.04.0+14.10.20140922-0ubuntu3) utopic; urgency=medium
+
+  * Rebuild for gnome-desktop 3.12 (LP: #1372346)
+  * debian/control: Drop depends gnome-settings-daemon-schemas (<< 3.10),
+    gnome-settings-daemon 3.12 reverts all removed keys 
+  * Fix merge of git patch for  xkb get/free info_vars
+
+ -- Tim Lunn <tim@feathertop.org>  Mon, 29 Sep 2014 20:05:27 +1000
+
 unity-settings-daemon (14.04.0+14.10.20140922-0ubuntu2) utopic; urgency=medium
 
   * debian/control:

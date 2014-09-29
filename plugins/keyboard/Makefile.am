@@ -19,6 +19,8 @@ libkeyboard_la_SOURCES = 	\
 	gsd-keyboard-plugin.c	\
 	gsd-keyboard-manager.h	\
 	gsd-keyboard-manager.c	\
+	gsd-xkb-utils.h		\
+	gsd-xkb-utils.c		\
 	$(NULL)
 
 libkeyboard_la_CPPFLAGS = \
@@ -28,6 +30,7 @@ libkeyboard_la_CPPFLAGS = \
 	-DDATADIR=\""$(pkgdatadir)"\"			\
 	-DLIBEXECDIR=\""$(libexecdir)"\"		\
 	-DGNOME_SETTINGS_LOCALEDIR=\""$(datadir)/locale"\" \
+	-DXKB_BASE=\""$(XKB_BASE)"\"			\
 	$(AM_CPPFLAGS)
 
 libkeyboard_la_CFLAGS = \
@@ -52,6 +55,8 @@ usd_test_keyboard_SOURCES =	\
 	test-keyboard.c		\
 	gsd-keyboard-manager.h	\
 	gsd-keyboard-manager.c	\
+	gsd-xkb-utils.h		\
+	gsd-xkb-utils.c		\
 	$(NULL)
 
 usd_test_keyboard_CFLAGS = $(libkeyboard_la_CFLAGS)
