@@ -37,6 +37,7 @@
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
 #include "gnome-settings-session.h"
+#include "gsd-idle-monitor-private.h"
 
 #define GNOME_SESSION_DBUS_NAME      "org.gnome.SessionManager"
 #define GNOME_SESSION_CLIENT_PRIVATE_DBUS_INTERFACE "org.gnome.SessionManager.ClientPrivate"
@@ -54,6 +55,8 @@ static GOptionEntry entries[] = {
         { "timed-exit", 0, 0, G_OPTION_ARG_NONE, &do_timed_exit, N_("Exit after a time (for debugging)"), NULL },
         {NULL}
 };
+
+
 
 static gboolean
 timed_exit_cb (void)
@@ -444,6 +447,7 @@ parse_args (int *argc, char ***argv)
                 g_setenv ("G_MESSAGES_DEBUG", "all", FALSE);
 }
 
+
 int
 main (int argc, char *argv[])
 {
@@ -453,6 +457,7 @@ main (int argc, char *argv[])
         bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
         textdomain (GETTEXT_PACKAGE);
         setlocale (LC_ALL, "");
+
 
         parse_args (&argc, &argv);
 
@@ -472,6 +477,8 @@ main (int argc, char *argv[])
         if (do_timed_exit) {
                 g_timeout_add_seconds (30, (GSourceFunc) timed_exit_cb, NULL);
         }
+     
+        gsd_idle_monitor_init_dbus (replace);
 
         gtk_main ();
 
