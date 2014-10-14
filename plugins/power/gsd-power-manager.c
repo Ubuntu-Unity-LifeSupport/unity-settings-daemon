@@ -3548,7 +3548,7 @@ gsd_power_manager_start (GsdPowerManager *manager,
                                                                   "use-time-for-policy");
 
         /* create IDLETIME watcher */
-        manager->priv->idle_monitor = gsd_idle_monitor_get_core ();
+        manager->priv->idle_monitor = g_object_ref (gsd_idle_monitor_get_core ());
 
         /* set up the screens */
         g_signal_connect (manager->priv->rr_screen, "changed", G_CALLBACK (on_randr_event), manager);

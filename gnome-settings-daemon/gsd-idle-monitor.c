@@ -321,10 +321,10 @@ idle_monitor_watch_free (GsdIdleMonitorWatch *watch)
   g_slice_free (GsdIdleMonitorWatch, watch);
 }
 
-GdkFilterReturn
+static GdkFilterReturn
 xevent_filter (GdkXEvent *xevent,
-               GdkEvent *event,
-               GsdIdleMonitor *monitor)
+               GdkEvent  *event,
+               gpointer   user_data)
 {
   XEvent *ev;
 
@@ -366,7 +366,9 @@ gsd_idle_monitor_dispose (GObject *object)
       monitor->user_active_alarm = None;
     }
 
-  device_monitors[monitor->device_id] = NULL;  
+  /* The device in device_monitors is cleared when the device is
+   * removed. Ensure that the object is not deleted before that. */
+  g_assert_null (device_monitors[monitor->device_id]);
 
   G_OBJECT_CLASS (gsd_idle_monitor_parent_class)->dispose (object);
 }
@@ -828,7 +830,6 @@ on_device_added (GdkDeviceManager         *device_manager,
   int device_id;
   char *path;
 
-  g_object_ref(device);
   device_id = gdk_x11_device_get_id (device);
   monitor = gsd_idle_monitor_get_for_device (device_id);
   g_object_ref(monitor);
@@ -851,7 +852,6 @@ on_device_removed (GdkDeviceManager         *device_manager,
   g_dbus_object_manager_server_unexport (manager, path);
   g_free (path);
 
-  g_object_unref(device_monitors[device_id]);
   g_clear_object (&device_monitors[device_id]);
   if (device_id == device_id_max)
     device_id_max--;
@@ -896,7 +896,7 @@ on_bus_acquired (GDBusConnection *connection,
 
   g_dbus_object_manager_server_set_connection (manager, connection);
 
-  gdk_window_add_filter (NULL, (GdkFilterFunc)xevent_filter, monitor);
+  gdk_window_add_filter (NULL, xevent_filter, NULL);
 }
 
 static void
@@ -912,10 +912,9 @@ on_name_lost (GDBusConnection *connection,
               const char      *name,
               gpointer         user_data)
 {
-  g_debug ("Lost or failed to acquire name %s\n", name);
+  g_warning ("Lost or failed to acquire name %s\n", name);
 
-  gdk_window_remove_filter (NULL, (GdkFilterFunc)xevent_filter, NULL);
-  //mainloop_quit();
+  gdk_window_remove_filter (NULL, xevent_filter, NULL);
 }
 
 static void

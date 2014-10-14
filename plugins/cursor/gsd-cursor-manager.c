@@ -147,8 +147,6 @@ monitor_became_active (GsdIdleMonitor *monitor,
         /* Make sure that all the other devices are watched
          * (but not the one we just stopped monitoring */
         add_all_devices (manager, device, NULL);
-
-        g_object_unref (device);
 }
 
 static gboolean
@@ -179,7 +177,7 @@ add_device (GdkDeviceManager *device_manager,
         }
         g_hash_table_insert (manager->priv->monitors,
                              device,
-                             monitor);
+                             g_object_ref (monitor));
         gsd_idle_monitor_add_user_active_watch (monitor,
                                                 monitor_became_active,
                                                 manager,
