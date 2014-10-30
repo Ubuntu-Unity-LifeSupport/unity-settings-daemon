@@ -45,6 +45,7 @@ Build-Depends: cdbs,
                libxkbfile-dev,
                xkb-data,
 Standards-Version: 3.9.3
+Vcs-Bzr: https://code.launchpad.net/~unity-settings-daemon-team/unity-settings-daemon/trunk
 
 Package: unity-settings-daemon
 Architecture: any

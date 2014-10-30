@@ -1243,17 +1243,34 @@ manager_critical_action_get (GsdPowerManager *manager,
                              gboolean         is_ups)
 {
         GsdPowerActionType policy;
+        GVariant *result = NULL;
 
         policy = g_settings_get_enum (manager->priv->settings, "critical-battery-action");
         if (policy == GSD_POWER_ACTION_SUSPEND) {
-                if (is_ups == FALSE &&
-                    up_client_get_can_suspend (manager->priv->up_client))
-                        return policy;
-                return GSD_POWER_ACTION_SHUTDOWN;
+                if (is_ups == FALSE)
+                        result = g_dbus_proxy_call_sync (manager->priv->logind_proxy,
+                                                         "CanSuspend",
+                                                         NULL,
+                                                         G_DBUS_CALL_FLAGS_NONE,
+                                                         -1, NULL, NULL);
         } else if (policy == GSD_POWER_ACTION_HIBERNATE) {
-                if (up_client_get_can_hibernate (manager->priv->up_client))
-                        return policy;
-                return GSD_POWER_ACTION_SHUTDOWN;
+                result = g_dbus_proxy_call_sync (manager->priv->logind_proxy,
+                                                 "CanHibernate",
+                                                 NULL,
+                                                 G_DBUS_CALL_FLAGS_NONE,
+                                                 -1, NULL, NULL);
+        } else {
+                /* Other actions need no check */
+                return policy;
+        }
+
+        if (result) {
+                const char *s;
+                g_variant_get (result, "(s)", &s);
+                if (g_strcmp0 (s, "yes") != 0)
+                        policy = GSD_POWER_ACTION_SHUTDOWN;
+        } else {
+                policy = GSD_POWER_ACTION_SHUTDOWN;
         }
 
         return policy;
