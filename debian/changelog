@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+15.04.20141127-0ubuntu1) vivid; urgency=medium
+
+  [ Iain Lane ]
+  * Add patch from Tim Lunn to support upower 0.99 properly. (LP: #1394063)
+
+  [ Dmitry Shachnev ]
+  * Add Gtk/DecorationLayout XSettings export (based on
+    org.gnome.desktop.wm.preferences button-layout GSettings key).
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Thu, 27 Nov 2014 11:42:11 +0000
+
 unity-settings-daemon (15.04.0+15.10.20141030-0ubuntu1) vivid; urgency=medium
 
   [ Tim Lunn ]
