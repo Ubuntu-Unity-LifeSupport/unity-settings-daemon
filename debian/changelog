@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+15.04.20141128-0ubuntu1) vivid; urgency=low
+
+  [ Bastien Nocera ]
+  * Remove recall check, upower doesn't support this any more and it was
+    causing a crash. (LP: #1397135)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Fri, 28 Nov 2014 09:48:43 +0000
+
 unity-settings-daemon (15.04.1+15.04.20141127-0ubuntu1) vivid; urgency=medium
 
   [ Iain Lane ]
