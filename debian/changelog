@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+15.04.20150107-0ubuntu1) vivid; urgency=low
+
+  [ Hui Wang ]
+  * show correct microphone mute icon (LP: #1381856, #1389099)
+
+ -- Ubuntu daily release <ps-jenkins@lists.canonical.com>  Wed, 07 Jan 2015 16:55:42 +0000
+
 unity-settings-daemon (15.04.1+15.04.20141128-0ubuntu1) vivid; urgency=low
 
   [ Bastien Nocera ]

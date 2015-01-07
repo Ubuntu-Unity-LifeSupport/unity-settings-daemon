@@ -257,6 +257,22 @@ static const char *volume_icons[] = {
         NULL
 };
 
+static const char *audio_volume_icons[] = {
+        "audio-volume-muted-symbolic",
+        "audio-volume-low-symbolic",
+        "audio-volume-medium-symbolic",
+        "audio-volume-high-symbolic",
+        NULL
+};
+
+static const char *mic_volume_icons[] = {
+        "microphone-sensitivity-muted-symbolic",
+        "microphone-sensitivity-low-symbolic",
+        "microphone-sensitivity-medium-symbolic",
+        "microphone-sensitivity-high-symbolic",
+        NULL
+};
+
 static const char *brightness_icons[] = {
         "notification-display-brightness-off",
 	"notification-display-brightness-low",
@@ -343,10 +359,13 @@ ubuntu_osd_do_notification (NotifyNotification **notification,
 static gboolean
 ubuntu_osd_notification_show_volume (GsdMediaKeysManager *manager,
                                      gint value,
-                                     gboolean muted)
+                                     gboolean muted,
+                                     gboolean is_mic)
 {
+        const char **icons_name = is_mic ? mic_volume_icons : volume_icons;
+
         return ubuntu_osd_do_notification (&manager->priv->volume_notification,
-                                           "volume", value, muted, volume_icons);
+                                           "volume", value, muted, icons_name);
 }
 
 static gboolean
@@ -606,20 +625,6 @@ get_icon_name_for_volume (gboolean is_mic,
                           gboolean muted,
                           int volume)
 {
-        static const char *icon_names[] = {
-                "audio-volume-muted-symbolic",
-                "audio-volume-low-symbolic",
-                "audio-volume-medium-symbolic",
-                "audio-volume-high-symbolic",
-                NULL
-        };
-        static const char *mic_icon_names[] = {
-                "microphone-sensitivity-muted-symbolic",
-                "microphone-sensitivity-low-symbolic",
-                "microphone-sensitivity-medium-symbolic",
-                "microphone-sensitivity-high-symbolic",
-                NULL
-        };
         int n;
 
         if (muted) {
@@ -635,9 +640,9 @@ get_icon_name_for_volume (gboolean is_mic,
         }
 
 	if (is_mic)
-		return mic_icon_names[n];
+		return mic_volume_icons[n];
 	else
-		return icon_names[n];
+		return audio_volume_icons[n];
 }
 
 static gboolean
@@ -1337,7 +1342,7 @@ update_dialog (GsdMediaKeysManager *manager,
         const GvcMixerStreamPort *port;
         const char *icon;
 
-        if (ubuntu_osd_notification_show_volume (manager, vol, muted))
+        if (ubuntu_osd_notification_show_volume (manager, vol, muted, !GVC_IS_MIXER_SINK (stream)))
                 goto done;
 
         vol = CLAMP (vol, 0, 100);
