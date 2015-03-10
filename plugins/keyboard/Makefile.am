@@ -15,6 +15,13 @@ icons_DATA = \
 	  kbd-capslock-off.png kbd-numlock-off.png kbd-scrolllock-off.png \
 	  kbd-capslock-on.png kbd-numlock-on.png kbd-scrolllock-on.png
 
+if HAVE_FCITX
+BUILT_SOURCES = input-method-engines.c
+endif
+
+input-method-engines.c: $(srcdir)/input-method-engines.gperf
+	$(AM_V_GEN) gperf --output-file=input-method-engines.c $<
+
 libkeyboard_la_SOURCES = 	\
 	gsd-keyboard-plugin.c	\
 	gsd-keyboard-manager.h	\

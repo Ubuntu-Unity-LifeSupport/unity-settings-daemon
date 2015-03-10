@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+15.04.20150310-0ubuntu1) vivid; urgency=medium
+
+  [ William Hua ]
+  * Basic Fcitx support. (LP: #1363150)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 10 Mar 2015 17:22:52 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150205-0ubuntu1) vivid; urgency=medium
 
   [ Sebastien Bacher ]

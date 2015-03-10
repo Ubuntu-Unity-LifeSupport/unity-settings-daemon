@@ -48,6 +48,11 @@
 #include <ibus.h>
 #endif
 
+#ifdef HAVE_FCITX
+#include <fcitx-config/fcitx-config.h>
+#include <fcitx-gclient/fcitxinputmethod.h>
+#endif
+
 #include <act/act.h>
 
 #include "gnome-settings-session.h"
@@ -56,6 +61,10 @@
 #include "gsd-input-helper.h"
 #include "gsd-enums.h"
 #include "gsd-xkb-utils.h"
+
+#ifdef HAVE_FCITX
+#include "input-method-engines.c"
+#endif
 
 #define GSD_KEYBOARD_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_KEYBOARD_MANAGER, GsdKeyboardManagerPrivate))
 
@@ -76,9 +85,11 @@
 
 #define GNOME_DESKTOP_INTERFACE_DIR "org.gnome.desktop.interface"
 
+#define ENV_GTK_IM_MODULE    "GTK_IM_MODULE"
 #define KEY_GTK_IM_MODULE    "gtk-im-module"
 #define GTK_IM_MODULE_SIMPLE "gtk-im-context-simple"
 #define GTK_IM_MODULE_IBUS   "ibus"
+#define GTK_IM_MODULE_FCITX  "fcitx"
 
 #define GNOME_DESKTOP_INPUT_SOURCES_DIR "org.gnome.desktop.input-sources"
 
@@ -86,8 +97,11 @@
 #define KEY_INPUT_SOURCES        "sources"
 #define KEY_KEYBOARD_OPTIONS     "xkb-options"
 
-#define INPUT_SOURCE_TYPE_XKB  "xkb"
-#define INPUT_SOURCE_TYPE_IBUS "ibus"
+#define INPUT_SOURCE_TYPE_XKB   "xkb"
+#define INPUT_SOURCE_TYPE_IBUS  "ibus"
+#define INPUT_SOURCE_TYPE_FCITX "fcitx"
+
+#define FCITX_XKB_PREFIX "fcitx-keyboard-"
 
 #define DEFAULT_LANGUAGE "en_US"
 #define DEFAULT_LAYOUT "us"
@@ -108,6 +122,13 @@ struct GsdKeyboardManagerPrivate
         IBusBus   *ibus;
         GHashTable *ibus_engines;
         GCancellable *ibus_cancellable;
+        gboolean is_ibus_active;
+#endif
+#ifdef HAVE_FCITX
+        FcitxInputMethod *fcitx;
+        GCancellable *fcitx_cancellable;
+        gulong fcitx_signal_id;
+        gboolean is_fcitx_active;
 #endif
         gint       xkb_event_base;
         GsdNumLockState old_state;
@@ -1079,6 +1100,186 @@ manager_notify_is_loaded_cb (GObject    *object,
         }
 }
 
+#ifdef HAVE_FCITX
+static gchar *
+get_xkb_name (const gchar *name)
+{
+        gchar *xkb_name;
+        gchar *separator;
+
+        if (g_str_has_prefix (name, FCITX_XKB_PREFIX))
+                name += strlen (FCITX_XKB_PREFIX);
+
+        xkb_name = g_strdup (name);
+        separator = strchr (xkb_name, '-');
+
+        if (separator)
+                *separator = '+';
+
+        return xkb_name;
+}
+
+static gchar *
+get_fcitx_name (const gchar *name)
+{
+        gchar *fcitx_name = g_strdup (name);
+        gchar *separator = strchr (fcitx_name, '+');
+
+        if (separator)
+                *separator = '-';
+
+        return fcitx_name;
+}
+
+static gboolean
+input_source_is_fcitx_engine (const gchar *type,
+                              const gchar *name,
+                              const gchar *engine)
+{
+        if (g_str_equal (type, INPUT_SOURCE_TYPE_XKB)) {
+                if (g_str_has_prefix (engine, FCITX_XKB_PREFIX)) {
+                        gboolean equal;
+                        gchar *fcitx_name = get_fcitx_name (name);
+                        equal = g_str_equal (fcitx_name, engine + strlen (FCITX_XKB_PREFIX));
+                        g_free (fcitx_name);
+                        return equal;
+                }
+        } else if (g_str_equal (type, INPUT_SOURCE_TYPE_FCITX)) {
+                return g_str_equal (name, engine);
+        }
+
+        return FALSE;
+}
+
+static void
+fcitx_engine_changed (GsdKeyboardManager *manager,
+                      GParamSpec         *pspec,
+                      FcitxInputMethod   *fcitx)
+{
+        GSettings *settings = manager->priv->input_sources_settings;
+        gchar *engine = fcitx_input_method_get_current_im (manager->priv->fcitx);
+
+        if (engine) {
+                GVariant *sources = g_settings_get_value (settings, KEY_INPUT_SOURCES);
+                guint current = g_settings_get_uint (settings, KEY_CURRENT_INPUT_SOURCE);
+                gboolean update = TRUE;
+
+                if (current >= 0 && current < g_variant_n_children (sources)) {
+                        const gchar *type;
+                        const gchar *name;
+
+                        g_variant_get_child (sources, current, "(&s&s)", &type, &name);
+                        update = !input_source_is_fcitx_engine (type, name, engine);
+                }
+
+                if (update) {
+                        gsize i;
+
+                        for (i = 0; i < g_variant_n_children (sources); i++) {
+                                const gchar *type;
+                                const gchar *name;
+
+                                if (i == current)
+                                        continue;
+
+                                g_variant_get_child (sources, i, "(&s&s)", &type, &name);
+
+                                if (input_source_is_fcitx_engine (type, name, engine)) {
+                                        g_settings_set_uint (settings, KEY_CURRENT_INPUT_SOURCE, i);
+                                        break;
+                                }
+                        }
+                }
+
+                g_variant_unref (sources);
+                g_free (engine);
+        }
+}
+
+static gboolean
+should_update_input_sources (GVariant  *sources,
+                             GPtrArray *engines)
+{
+        GVariantIter iter;
+        const gchar *type;
+        const gchar *name;
+        guint i = 0;
+
+        g_variant_iter_init (&iter, sources);
+        while (g_variant_iter_next (&iter, "(&s&s)", &type, &name)) {
+                if (g_str_equal (type, INPUT_SOURCE_TYPE_XKB) ||
+                    g_str_equal (type, INPUT_SOURCE_TYPE_FCITX)) {
+                        FcitxIMItem *engine;
+
+                        /* get the next enabled fcitx engine */
+                        for (; i < engines->len; i++) {
+                                engine = g_ptr_array_index (engines, i);
+
+                                if (engine->enable)
+                                        break;
+                        }
+
+                        /* there should be an enabled engine and it should match, otherwise we need to update */
+                        if (i++ >= engines->len || !input_source_is_fcitx_engine (type, name, engine->unique_name))
+                                return TRUE;
+                }
+        }
+
+        /* if there are more enabled engines, we need to update */
+        for (; i < engines->len; i++) {
+                FcitxIMItem *engine = g_ptr_array_index (engines, i);
+
+                if (engine->enable)
+                        return TRUE;
+        }
+
+        return FALSE;
+}
+
+static void
+update_input_sources_from_fcitx_engines (GsdKeyboardManager *manager,
+                                         FcitxInputMethod   *fcitx)
+{
+        GPtrArray *engines = fcitx_input_method_get_imlist (manager->priv->fcitx);
+
+        if (engines) {
+                GVariant *sources = g_settings_get_value (manager->priv->input_sources_settings, KEY_INPUT_SOURCES);
+
+                if (should_update_input_sources (sources, engines)) {
+                        GVariantBuilder builder;
+                        gboolean update = FALSE;
+                        guint i;
+
+                        g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ss)"));
+
+                        for (i = 0; i < engines->len; i++) {
+                                FcitxIMItem *engine = g_ptr_array_index (engines, i);
+
+                                if (engine->enable) {
+                                        if (g_str_has_prefix (engine->unique_name, FCITX_XKB_PREFIX)) {
+                                                gchar *name = get_xkb_name (engine->unique_name);
+                                                g_variant_builder_add (&builder, "(ss)", INPUT_SOURCE_TYPE_XKB, name);
+                                                g_free (name);
+                                        } else {
+                                                g_variant_builder_add (&builder, "(ss)", INPUT_SOURCE_TYPE_FCITX, engine->unique_name);
+                                        }
+
+                                        update = TRUE;
+                                }
+                        }
+
+                        if (update)
+                                g_settings_set_value (manager->priv->input_sources_settings, KEY_INPUT_SOURCES, g_variant_builder_end (&builder));
+                        else
+                                g_variant_builder_clear (&builder);
+                }
+
+                g_variant_unref (sources);
+                g_ptr_array_unref (engines);
+        }
+}
+#endif
+
 static gboolean
 apply_input_source (GsdKeyboardManager *manager,
                     guint               current)
@@ -1103,7 +1304,9 @@ apply_input_source (GsdKeyboardManager *manager,
         priv->active_input_source = current;
 
 #ifdef HAVE_IBUS
-        maybe_start_ibus (manager);
+        if (priv->is_ibus_active) {
+                maybe_start_ibus (manager);
+        }
 #endif
 
         g_variant_get_child (sources, current, "(&s&s)", &type, &id);
@@ -1119,43 +1322,85 @@ apply_input_source (GsdKeyboardManager *manager,
                         g_warning ("Couldn't find XKB input source '%s'", id);
                         goto exit;
                 }
+
+#ifdef HAVE_FCITX
+                if (priv->is_fcitx_active && priv->fcitx) {
+                        gchar *name = g_strdup_printf (FCITX_XKB_PREFIX "%s", id);
+                        gchar *fcitx_name = get_fcitx_name (name);
+                        fcitx_input_method_activate (priv->fcitx);
+                        fcitx_input_method_set_current_im (priv->fcitx, fcitx_name);
+                        g_free (fcitx_name);
+                        g_free (name);
+                }
+#endif
+
 #ifdef HAVE_IBUS
-                set_gtk_im_module (manager, sources);
-                set_ibus_xkb_engine (manager);
+                if (priv->is_ibus_active) {
+                        set_gtk_im_module (manager, sources);
+                        set_ibus_xkb_engine (manager);
+                }
 #endif
         } else if (g_str_equal (type, INPUT_SOURCE_TYPE_IBUS)) {
 #ifdef HAVE_IBUS
-                IBusEngineDesc *engine_desc = NULL;
+                if (priv->is_ibus_active) {
+                        IBusEngineDesc *engine_desc = NULL;
 
-                if (priv->ibus_engines)
-                        engine_desc = g_hash_table_lookup (priv->ibus_engines, id);
-                else
-                        goto exit; /* we'll be called again when ibus is up and running */
+                        if (priv->ibus_engines)
+                                engine_desc = g_hash_table_lookup (priv->ibus_engines, id);
+                        else
+                                goto exit; /* we'll be called again when ibus is up and running */
 
-                if (engine_desc) {
-                        const gchar *ibus_layout;
-                        ibus_layout = ibus_engine_desc_get_layout (engine_desc);
+                        if (engine_desc) {
+                                const gchar *ibus_layout;
+                                ibus_layout = ibus_engine_desc_get_layout (engine_desc);
 
-                        if (ibus_layout) {
-                                layout = layout_from_ibus_layout (ibus_layout);
-                                variant = variant_from_ibus_layout (ibus_layout);
-                                options = options_from_ibus_layout (ibus_layout);
+                                if (ibus_layout) {
+                                        layout = layout_from_ibus_layout (ibus_layout);
+                                        variant = variant_from_ibus_layout (ibus_layout);
+                                        options = options_from_ibus_layout (ibus_layout);
+                                }
+                        } else {
+                                g_warning ("Couldn't find IBus input source '%s'", id);
+                                goto exit;
                         }
-                } else {
-                        g_warning ("Couldn't find IBus input source '%s'", id);
-                        goto exit;
-                }
 
-                /* NULL here is a shortcut for "I already know I
-                   need the IBus module". */
-                set_gtk_im_module (manager, NULL);
-                set_ibus_engine (manager, id);
+                        /* NULL here is a shortcut for "I already know I
+                           need the IBus module". */
+                        set_gtk_im_module (manager, NULL);
+                        set_ibus_engine (manager, id);
+                } else {
+                        g_warning ("IBus input source type specified but IBus is not active");
+                }
 #else
                 g_warning ("IBus input source type specified but IBus support was not compiled");
+#endif
+        } else if (g_str_equal (type, INPUT_SOURCE_TYPE_FCITX)) {
+#ifdef HAVE_FCITX
+                if (priv->is_fcitx_active) {
+                        if (priv->fcitx) {
+                                gchar *name = g_strdup (id);
+                                fcitx_input_method_activate (priv->fcitx);
+                                fcitx_input_method_set_current_im (priv->fcitx, name);
+                                g_free (name);
+                        } else {
+                                g_warning ("Fcitx input method framework unavailable");
+                        }
+                } else {
+                        g_warning ("Fcitx input source type specified but Fcitx is not active");
+                }
+#else
+                g_warning ("Fcitx input source type specified but Fcitx support was not compiled");
 #endif
         } else {
                 g_warning ("Unknown input source type '%s'", type);
         }
+
+#ifdef HAVE_FCITX
+        if (priv->is_fcitx_active && priv->fcitx && !priv->fcitx_signal_id) {
+                priv->fcitx_signal_id = g_signal_connect_swapped (manager->priv->fcitx, "notify::current-im", G_CALLBACK (fcitx_engine_changed), manager);
+                g_signal_connect_swapped (manager->priv->fcitx, "imlist-changed", G_CALLBACK (update_input_sources_from_fcitx_engines), manager);
+        }
+#endif
 
  exit:
         apply_xkb_settings (manager, layout, variant,
@@ -1167,6 +1412,229 @@ apply_input_source (GsdKeyboardManager *manager,
         g_strfreev (options);
         return TRUE;
 }
+
+#ifdef HAVE_FCITX
+static const gchar *
+get_fcitx_engine_for_ibus_engine (const gchar *ibus_engine)
+{
+        const struct Engine *engine;
+
+        if (!ibus_engine)
+                return NULL;
+
+        engine = get_engine_for_ibus_engine (ibus_engine, strlen (ibus_engine));
+
+        return engine ? engine->fcitx_engine : NULL;
+}
+
+static void
+enable_fcitx_engines (GsdKeyboardManager *manager,
+                      gboolean            migrate)
+{
+        GsdKeyboardManagerPrivate *priv = manager->priv;
+        GPtrArray *engines;
+        GVariant *sources;
+        GVariantIter iter;
+        const gchar *type;
+        const gchar *name;
+        gboolean changed;
+        guint i;
+        guint j;
+
+        engines = fcitx_input_method_get_imlist (priv->fcitx);
+
+        if (!engines) {
+                g_warning ("Cannot update Fcitx engine list");
+                return;
+        }
+
+        sources = g_settings_get_value (priv->input_sources_settings, KEY_INPUT_SOURCES);
+        changed = FALSE;
+        i = 0;
+
+        g_variant_iter_init (&iter, sources);
+        while (g_variant_iter_next (&iter, "(&s&s)", &type, &name)) {
+                if (g_str_equal (type, INPUT_SOURCE_TYPE_XKB)) {
+                        gchar *fcitx_name = get_fcitx_name (name);
+
+                        for (j = i; j < engines->len; j++) {
+                                FcitxIMItem *engine = g_ptr_array_index (engines, j);
+
+                                if (g_str_has_prefix (engine->unique_name, FCITX_XKB_PREFIX) &&
+                                    g_str_equal (engine->unique_name + strlen (FCITX_XKB_PREFIX), fcitx_name)) {
+                                        if (!engine->enable) {
+                                                engine->enable = TRUE;
+                                                changed = TRUE;
+                                        }
+
+                                        break;
+                                }
+                        }
+
+                        g_free (fcitx_name);
+
+                        /* j is either the index of the engine "fcitx-keyboard-<name>"
+                         * or engines->len, meaning it wasn't found. */
+                } else if (migrate && g_str_equal (type, INPUT_SOURCE_TYPE_IBUS)) {
+                        const gchar *fcitx_name = get_fcitx_engine_for_ibus_engine (name);
+
+                        if (!fcitx_name)
+                                continue;
+
+                        for (j = i; j < engines->len; j++) {
+                                FcitxIMItem *engine = g_ptr_array_index (engines, j);
+
+                                if (g_str_equal (engine->unique_name, fcitx_name)) {
+                                        if (!engine->enable) {
+                                                engine->enable = TRUE;
+                                                changed = TRUE;
+                                        }
+
+                                        break;
+                                }
+                        }
+
+                        /* j is either the index of the engine "<name>"
+                         * or engines->len, meaning it wasn't found. */
+                } else if (g_str_equal (type, INPUT_SOURCE_TYPE_FCITX)) {
+                        for (j = i; j < engines->len; j++) {
+                                FcitxIMItem *engine = g_ptr_array_index (engines, j);
+
+                                if (g_str_equal (engine->unique_name, name)) {
+                                        if (!engine->enable) {
+                                                engine->enable = TRUE;
+                                                changed = TRUE;
+                                        }
+
+                                        break;
+                                }
+                        }
+
+                        /* j is either the index of the engine "<name>"
+                         * or engines->len, meaning it wasn't found. */
+                } else {
+                        continue;
+                }
+
+                if (j < engines->len) {
+                        if (j != i) {
+                                gpointer ptr = engines->pdata[i];
+                                engines->pdata[i] = engines->pdata[j];
+                                engines->pdata[j] = ptr;
+                                changed = TRUE;
+                        }
+
+                        i++;
+                } else {
+                        g_warning ("Fcitx engine not found for %s", name);
+                }
+        }
+
+        /* we should have i enabled fcitx engines: disable everything else. */
+
+        for (; i < engines->len; i++) {
+                FcitxIMItem *engine = g_ptr_array_index (engines, i);
+
+                if (engine->enable) {
+                        engine->enable = FALSE;
+                        changed = TRUE;
+                }
+        }
+
+        if (changed) {
+                fcitx_input_method_set_imlist (priv->fcitx, engines);
+        }
+
+        g_variant_unref (sources);
+        g_ptr_array_unref (engines);
+}
+
+struct _FcitxShareStateConfig
+{
+        FcitxGenericConfig config;
+        gint share_state;
+};
+
+typedef struct _FcitxShareStateConfig FcitxShareStateConfig;
+
+static CONFIG_BINDING_BEGIN (FcitxShareStateConfig)
+CONFIG_BINDING_REGISTER ("Program", "ShareStateAmongWindow", share_state)
+CONFIG_BINDING_END ()
+
+static CONFIG_DESC_DEFINE (get_fcitx_config_desc, "config.desc")
+
+static void
+update_share_state_from_per_window (GsdKeyboardManager *manager)
+{
+        /* Set Fcitx' share state setting based on the GSettings per-window option. */
+        GSettings *settings = g_settings_new ("org.gnome.libgnomekbd.desktop");
+        gboolean per_window = g_settings_get_boolean (settings, "group-per-window");
+
+        FcitxShareStateConfig config = { { NULL } };
+
+        /* Load the user's Fcitx configuration. */
+        FILE *file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "r", NULL);
+        FcitxConfigFile *config_file = FcitxConfigParseConfigFileFp (file, get_fcitx_config_desc ());
+        FcitxShareStateConfigConfigBind (&config, config_file, get_fcitx_config_desc ());
+
+        if (file)
+                fclose (file);
+
+        config.share_state = per_window ? 0 : 1;
+
+        /* Save the user's Fcitx configuration. */
+        file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "w", NULL);
+        FcitxConfigSaveConfigFileFp (file, &config.config, get_fcitx_config_desc ());
+
+        if (file)
+                fclose (file);
+
+        fcitx_input_method_reload_config (manager->priv->fcitx);
+
+        g_object_unref (settings);
+}
+
+static void
+migrate_fcitx_engines (GsdKeyboardManager *manager)
+{
+        GPtrArray *engines = fcitx_input_method_get_imlist (manager->priv->fcitx);
+
+        if (engines) {
+                gboolean migrate = FALSE;
+                gboolean second = FALSE;
+                guint i;
+
+                /* Migrate if there are at least two enabled fcitx engines or
+                 * there is one fcitx engine which is not a keyboard layout.
+                 * These are our criteria for determining which direction to
+                 * sync fcitx engines with input sources. */
+
+                for (i = 0; i < engines->len; i++) {
+                        FcitxIMItem *engine = g_ptr_array_index (engines, i);
+
+                        if (engine->enable) {
+                                if (second || !g_str_has_prefix (engine->unique_name, FCITX_XKB_PREFIX)) {
+                                        migrate = TRUE;
+                                        break;
+                                }
+
+                                second = TRUE;
+                        }
+                }
+
+                if (migrate) {
+                        /* Migrate Fcitx to GSettings. */
+                        update_input_sources_from_fcitx_engines (manager, manager->priv->fcitx);
+                } else {
+                        /* Migrate GSettings to Fcitx. */
+                        enable_fcitx_engines (manager, TRUE);
+                        update_share_state_from_per_window (manager);
+                }
+
+                g_ptr_array_unref (engines);
+        }
+}
+#endif
 
 static gboolean
 apply_input_sources_settings (GSettings          *settings,
@@ -1180,6 +1648,30 @@ apply_input_sources_settings (GSettings          *settings,
         guint current;
         ActUserManager *user_manager;
         gboolean user_manager_loaded;
+
+#ifdef HAVE_FCITX
+        if (priv->is_fcitx_active) {
+                gboolean sources_changed = FALSE;
+
+                if (keys) {
+                        GQuark *quarks = keys;
+                        gint i;
+
+                        for (i = 0; i < n_keys; i++) {
+                                if (quarks[i] == g_quark_try_string (KEY_INPUT_SOURCES)) {
+                                        sources_changed = TRUE;
+                                        break;
+                                }
+                        }
+                } else {
+                        sources_changed = TRUE;
+                }
+
+                if (sources_changed) {
+                        enable_fcitx_engines (manager, FALSE);
+                }
+        }
+#endif
 
         sources = g_settings_get_value (priv->input_sources_settings, KEY_INPUT_SOURCES);
         n_sources = g_variant_n_children (sources);
@@ -1546,11 +2038,10 @@ convert_libgnomekbd_layouts (GSettings *settings)
         g_object_unref (libgnomekbd_settings);
 }
 
-static void
-maybe_convert_old_settings (GSettings *settings)
+static gboolean
+should_migrate (const gchar *id)
 {
-        GVariant *sources;
-        gchar **options;
+        gboolean migrate = FALSE;
         gchar *stamp_dir_path = NULL;
         gchar *stamp_file_path = NULL;
         GError *error = NULL;
@@ -1561,23 +2052,11 @@ maybe_convert_old_settings (GSettings *settings)
                 goto out;
         }
 
-        stamp_file_path = g_build_filename (stamp_dir_path, "input-sources-converted", NULL);
+        stamp_file_path = g_build_filename (stamp_dir_path, id, NULL);
         if (g_file_test (stamp_file_path, G_FILE_TEST_EXISTS))
                 goto out;
 
-        sources = g_settings_get_value (settings, KEY_INPUT_SOURCES);
-        if (g_variant_n_children (sources) < 1) {
-                convert_libgnomekbd_layouts (settings);
-#ifdef HAVE_IBUS
-                convert_ibus (settings);
-#endif
-        }
-        g_variant_unref (sources);
-
-        options = g_settings_get_strv (settings, KEY_KEYBOARD_OPTIONS);
-        if (g_strv_length (options) < 1)
-                convert_libgnomekbd_options (settings);
-        g_strfreev (options);
+        migrate = TRUE;
 
         if (!g_file_set_contents (stamp_file_path, "", 0, &error)) {
                 g_warning ("%s", error->message);
@@ -1586,6 +2065,30 @@ maybe_convert_old_settings (GSettings *settings)
 out:
         g_free (stamp_file_path);
         g_free (stamp_dir_path);
+        return migrate;
+}
+
+static void
+maybe_convert_old_settings (GSettings *settings)
+{
+        if (should_migrate ("input-sources-converted")) {
+                GVariant *sources;
+                gchar **options;
+
+                sources = g_settings_get_value (settings, KEY_INPUT_SOURCES);
+                if (g_variant_n_children (sources) < 1) {
+                        convert_libgnomekbd_layouts (settings);
+#ifdef HAVE_IBUS
+                        convert_ibus (settings);
+#endif
+                }
+                g_variant_unref (sources);
+
+                options = g_settings_get_strv (settings, KEY_KEYBOARD_OPTIONS);
+                if (g_strv_length (options) < 1)
+                        convert_libgnomekbd_options (settings);
+                g_strfreev (options);
+        }
 }
 
 static void
@@ -1708,10 +2211,12 @@ handle_dbus_method_call (GDBusConnection       *connection,
         if (is_set_input_source || is_activate_input_source) {
                 if (priv->invocation) {
 #ifdef HAVE_IBUS
-                        /* This can only happen if there's an
-                         * ibus_bus_set_global_engine_async() call
-                         * going on. */
-                        g_cancellable_cancel (priv->ibus_cancellable);
+                        if (priv->is_ibus_active) {
+                                /* This can only happen if there's an
+                                 * ibus_bus_set_global_engine_async() call
+                                 * going on. */
+                                g_cancellable_cancel (priv->ibus_cancellable);
+                        }
 #endif
                         g_clear_pointer (&priv->invocation, set_input_source_return);
                         priv->pending_ops = 0;
@@ -1840,12 +2345,45 @@ out:
         register_manager_dbus (manager);
 }
 
+#ifdef HAVE_FCITX
+static void
+fcitx_appeared (GDBusConnection *connection,
+                const gchar     *name,
+                const gchar     *name_owner,
+                gpointer         user_data)
+{
+        GsdKeyboardManager *manager = user_data;
+        apply_input_sources_settings (manager->priv->input_sources_settings, NULL, 0, manager);
+}
+
+static void
+fcitx_vanished (GDBusConnection *connection,
+                const gchar     *name,
+                gpointer         user_data)
+{
+        GsdKeyboardManager *manager = user_data;
+        g_signal_handlers_disconnect_by_data (manager->priv->fcitx, manager);
+        manager->priv->fcitx_signal_id = 0;
+}
+#endif
+
 static gboolean
 start_keyboard_idle_cb (GsdKeyboardManager *manager)
 {
+        const gchar *module;
+        GError *error = NULL;
+
         gnome_settings_profile_start (NULL);
 
         g_debug ("Starting keyboard manager");
+
+        module = g_getenv (ENV_GTK_IM_MODULE);
+#ifdef HAVE_IBUS
+        manager->priv->is_ibus_active = g_strcmp0 (module, GTK_IM_MODULE_IBUS) == 0;
+#endif
+#ifdef HAVE_FCITX
+        manager->priv->is_fcitx_active = g_strcmp0 (module, GTK_IM_MODULE_FCITX) == 0;
+#endif
 
         manager->priv->settings = g_settings_new (GSD_KEYBOARD_DIR);
 
@@ -1856,6 +2394,38 @@ start_keyboard_idle_cb (GsdKeyboardManager *manager)
         manager->priv->input_sources_settings = g_settings_new (GNOME_DESKTOP_INPUT_SOURCES_DIR);
         manager->priv->interface_settings = g_settings_new (GNOME_DESKTOP_INTERFACE_DIR);
         manager->priv->xkb_info = gnome_xkb_info_new ();
+
+#ifdef HAVE_FCITX
+        if (manager->priv->is_fcitx_active) {
+                manager->priv->fcitx_cancellable = g_cancellable_new ();
+                manager->priv->fcitx = fcitx_input_method_new (G_BUS_TYPE_SESSION,
+                                                               G_DBUS_PROXY_FLAGS_GET_INVALIDATED_PROPERTIES,
+                                                               0,
+                                                               manager->priv->fcitx_cancellable,
+                                                               &error);
+                g_clear_object (&manager->priv->fcitx_cancellable);
+
+                if (manager->priv->fcitx) {
+                        manager->priv->fcitx_signal_id = 0;
+
+                        g_bus_watch_name (G_BUS_TYPE_SESSION,
+                                          "org.fcitx.Fcitx",
+                                          G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                          fcitx_appeared,
+                                          fcitx_vanished,
+                                          manager,
+                                          NULL);
+
+                        if (should_migrate ("fcitx-engines-migrated"))
+                                migrate_fcitx_engines (manager);
+                        else
+                                enable_fcitx_engines (manager, FALSE);
+                } else {
+                        g_warning ("Fcitx input method framework unavailable: %s", error->message);
+                        g_error_free (error);
+                }
+        }
+#endif
 
         manager->priv->cancellable = g_cancellable_new ();
 
@@ -1933,8 +2503,21 @@ gsd_keyboard_manager_stop (GsdKeyboardManager *manager)
         g_clear_object (&p->xkb_info);
         g_clear_object (&p->localed);
 
+#ifdef HAVE_FCITX
+        if (p->is_fcitx_active) {
+                if (p->fcitx_cancellable) {
+                        g_cancellable_cancel (p->fcitx_cancellable);
+                }
+
+                g_clear_object (&p->fcitx_cancellable);
+                g_clear_object (&p->fcitx);
+        }
+#endif
+
 #ifdef HAVE_IBUS
-        clear_ibus (manager);
+        if (p->is_ibus_active) {
+                clear_ibus (manager);
+        }
 #endif
 
         if (p->device_manager != NULL) {

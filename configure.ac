@@ -204,7 +204,26 @@ else
 fi
 AM_CONDITIONAL(HAVE_IBUS, test "x$enable_ibus" == "xyes")
 
-PKG_CHECK_MODULES(KEYBOARD, accountsservice xkbfile xkeyboard-config  $IBUS_MODULE gnome-desktop-3.0 >= $GNOME_DESKTOP_REQUIRED_VERSION)
+AC_ARG_ENABLE(fcitx,
+        AS_HELP_STRING([--disable-fcitx],
+                       [Disable Fcitx support]),
+        enable_fcitx=$enableval,
+        enable_fcitx=yes)
+
+if test "x$enable_fcitx" = "xyes" ; then
+        FCITX_MODULE="fcitx-config fcitx-gclient"
+        AC_DEFINE(HAVE_FCITX, 1, [Defined if Fcitx support is enabled])
+
+        AC_CHECK_PROG(HAVE_GPERF, gperf, yes)
+        if test "x$HAVE_GPERF" != "xyes" ; then
+                AC_MSG_ERROR([gperf needed for Fcitx support])
+        fi
+else
+        FCITX_MODULE=
+fi
+AM_CONDITIONAL(HAVE_FCITX, test "x$enable_fcitx" == "xyes")
+
+PKG_CHECK_MODULES(KEYBOARD, accountsservice xkbfile xkeyboard-config $IBUS_MODULE $FCITX_MODULE gnome-desktop-3.0 >= $GNOME_DESKTOP_REQUIRED_VERSION)
 
 XKB_BASE=$($PKG_CONFIG --variable xkb_base xkeyboard-config)
 AC_SUBST(XKB_BASE)
@@ -218,7 +237,7 @@ dnl ---------------------------------------------------------------------------
 dnl - media-keys plugin stuff
 dnl ---------------------------------------------------------------------------
 
-PKG_CHECK_MODULES(MEDIA_KEYS, [gio-unix-2.0 libpulse >= $PA_REQUIRED_VERSION $GUDEV_PKG libpulse-mainloop-glib >= $PA_REQUIRED_VERSION libcanberra-gtk3 libnotify alsa])
+PKG_CHECK_MODULES(MEDIA_KEYS, [gio-unix-2.0 libpulse >= $PA_REQUIRED_VERSION $GUDEV_PKG libpulse-mainloop-glib >= $PA_REQUIRED_VERSION libcanberra-gtk3 libnotify alsa $FCITX_MODULE])
 PKG_CHECK_MODULES(GVC, [gobject-2.0 libpulse >= $PA_REQUIRED_VERSION libpulse-mainloop-glib >= $PA_REQUIRED_VERSION])
 AM_CONDITIONAL(HAVE_INTROSPECTION, false)
 
@@ -564,6 +583,7 @@ echo "
         Session tracking:         ${SESSION_TRACKING}
         LCMS DICT support:        ${have_new_lcms}
         IBus support:             ${enable_ibus}
+        Fcitx support:            ${enable_fcitx}
         Libnotify support:        ${have_libnotify}
         PackageKit support:       ${have_packagekit}
         Smartcard support:        ${have_smartcard_support}

@@ -67,6 +67,10 @@
 
 #include <libnotify/notify.h>
 
+#ifdef HAVE_FCITX
+#include <fcitx-gclient/fcitxinputmethod.h>
+#endif
+
 #define GSD_MEDIA_KEYS_DBUS_PATH GSD_DBUS_PATH "/MediaKeys"
 #define GSD_MEDIA_KEYS_DBUS_NAME GSD_DBUS_NAME ".MediaKeys"
 
@@ -116,9 +120,19 @@ static const gchar introspection_xml[] =
 
 #define VOLUME_STEP 6           /* percents for one volume button press */
 
+#define ENV_GTK_IM_MODULE   "GTK_IM_MODULE"
+#define GTK_IM_MODULE_IBUS  "ibus"
+#define GTK_IM_MODULE_FCITX "fcitx"
+
 #define GNOME_DESKTOP_INPUT_SOURCES_DIR "org.gnome.desktop.input-sources"
 #define KEY_CURRENT_INPUT_SOURCE "current"
 #define KEY_INPUT_SOURCES        "sources"
+
+#define INPUT_SOURCE_TYPE_XKB   "xkb"
+#define INPUT_SOURCE_TYPE_IBUS  "ibus"
+#define INPUT_SOURCE_TYPE_FCITX "fcitx"
+
+#define FCITX_XKB_PREFIX "fcitx-keyboard-"
 
 #define SYSTEMD_DBUS_NAME                       "org.freedesktop.login1"
 #define SYSTEMD_DBUS_PATH                       "/org/freedesktop/login1"
@@ -217,6 +231,13 @@ struct GsdMediaKeysManagerPrivate
         guint           unity_name_owner_id;
         guint           panel_name_owner_id;
         guint           have_legacy_keygrabber;
+
+#ifdef HAVE_FCITX
+        FcitxInputMethod *fcitx;
+#endif
+
+        gboolean         is_ibus_active;
+        gboolean         is_fcitx_active;
 
         /* What did you plug in dialog */
         pa_backend      *wdypi_pa_backend;
@@ -2131,16 +2152,53 @@ do_config_power_action (GsdMediaKeysManager *manager,
 
 }
 
+#ifdef HAVE_FCITX
+static gchar *
+get_fcitx_name (const gchar *name)
+{
+        gchar *fcitx_name = g_strdup (name);
+        gchar *separator = strchr (fcitx_name, '+');
+
+        if (separator)
+                *separator = '-';
+
+        return fcitx_name;
+}
+
+static gboolean
+input_source_is_fcitx_engine (const gchar *type,
+                              const gchar *name,
+                              const gchar *engine)
+{
+        if (g_str_equal (type, INPUT_SOURCE_TYPE_XKB)) {
+                if (g_str_has_prefix (engine, FCITX_XKB_PREFIX)) {
+                        gboolean equal;
+                        gchar *fcitx_name = get_fcitx_name (name);
+                        equal = g_str_equal (fcitx_name, engine + strlen (FCITX_XKB_PREFIX));
+                        g_free (fcitx_name);
+                        return equal;
+                }
+        } else if (g_str_equal (type, INPUT_SOURCE_TYPE_FCITX)) {
+                return g_str_equal (name, engine);
+        }
+
+        return FALSE;
+}
+#endif
+
 static void
 do_switch_input_source_action (GsdMediaKeysManager *manager,
                                MediaKeyType         type)
 {
+        GsdMediaKeysManagerPrivate *priv = manager->priv;
         GSettings *settings;
         GVariant *sources;
+        const gchar *source_type;
+        guint first;
         gint i, n;
 
         if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "ubuntu") != 0)
-                if (!manager->priv->have_legacy_keygrabber)
+                if (!priv->have_legacy_keygrabber)
                         return;
 
         settings = g_settings_new (GNOME_DESKTOP_INPUT_SOURCES_DIR);
@@ -2150,19 +2208,52 @@ do_switch_input_source_action (GsdMediaKeysManager *manager,
         if (n < 2)
                 goto out;
 
-        i = g_settings_get_uint (settings, KEY_CURRENT_INPUT_SOURCE);
+        i = -1;
 
-        if (type == SWITCH_INPUT_SOURCE_KEY)
-                i += 1;
-        else
-                i -= 1;
+#ifdef HAVE_FCITX
+        if (priv->is_fcitx_active && priv->fcitx) {
+                gchar *engine = fcitx_input_method_get_current_im (priv->fcitx);
+
+                if (engine) {
+                        GVariantIter iter;
+                        const gchar *source_name;
+
+                        g_variant_iter_init (&iter, sources);
+                        for (i = 0; g_variant_iter_next (&iter, "(&s&s)", &source_type, &source_name); i++) {
+                                if (input_source_is_fcitx_engine (source_type, source_name, engine)) {
+                                        break;
+                                }
+                        }
+
+                        if (i >= g_variant_n_children (sources))
+                                i = -1;
+
+                        g_free (engine);
+                }
+        }
+#endif
 
         if (i < 0)
-                i = n - 1;
-        else if (i >= n)
-                i = 0;
+                i = g_settings_get_uint (settings, KEY_CURRENT_INPUT_SOURCE);
 
-        g_settings_set_uint (settings, KEY_CURRENT_INPUT_SOURCE, i);
+        first = i;
+
+        if (type == SWITCH_INPUT_SOURCE_KEY) {
+                do {
+                        i = (i + 1) % n;
+                        g_variant_get_child (sources, i, "(&s&s)", &source_type, NULL);
+                } while (i != first && ((g_str_equal (source_type, INPUT_SOURCE_TYPE_IBUS) && !priv->is_ibus_active) ||
+                                        (g_str_equal (source_type, INPUT_SOURCE_TYPE_FCITX) && !priv->is_fcitx_active)));
+        } else {
+                do {
+                        i = (i + n - 1) % n;
+                        g_variant_get_child (sources, i, "(&s&s)", &source_type, NULL);
+                } while (i != first && ((g_str_equal (source_type, INPUT_SOURCE_TYPE_IBUS) && !priv->is_ibus_active) ||
+                                        (g_str_equal (source_type, INPUT_SOURCE_TYPE_FCITX) && !priv->is_fcitx_active)));
+        }
+
+        if (i != first)
+                g_settings_set_uint (settings, KEY_CURRENT_INPUT_SOURCE, i);
 
  out:
         g_variant_unref (sources);
@@ -2931,10 +3022,34 @@ stop_legacy_grabber (GDBusConnection  *connection,
 static gboolean
 start_media_keys_idle_cb (GsdMediaKeysManager *manager)
 {
+        const gchar *module;
         char *theme_name;
 
         g_debug ("Starting media_keys manager");
         gnome_settings_profile_start (NULL);
+
+        module = g_getenv (ENV_GTK_IM_MODULE);
+#ifdef HAVE_IBUS
+        manager->priv->is_ibus_active = g_strcmp0 (module, GTK_IM_MODULE_IBUS) == 0;
+#endif
+#ifdef HAVE_FCITX
+        manager->priv->is_fcitx_active = g_strcmp0 (module, GTK_IM_MODULE_FCITX) == 0;
+
+        if (manager->priv->is_fcitx_active) {
+                GError *error = NULL;
+
+                manager->priv->fcitx = fcitx_input_method_new (G_BUS_TYPE_SESSION,
+                                                               G_DBUS_PROXY_FLAGS_NONE,
+                                                               0,
+                                                               NULL,
+                                                               &error);
+
+                if (!manager->priv->fcitx) {
+                        g_warning ("Fcitx connection unavailable: %s", error->message);
+                        g_error_free (error);
+                }
+        }
+#endif
 
         manager->priv->keys = g_ptr_array_new_with_free_func ((GDestroyNotify) media_key_free);
 
