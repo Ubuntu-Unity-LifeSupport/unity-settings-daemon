@@ -1566,32 +1566,36 @@ static CONFIG_DESC_DEFINE (get_fcitx_config_desc, "config.desc")
 static void
 update_share_state_from_per_window (GsdKeyboardManager *manager)
 {
-        /* Set Fcitx' share state setting based on the GSettings per-window option. */
-        GSettings *settings = g_settings_new ("org.gnome.libgnomekbd.desktop");
-        gboolean per_window = g_settings_get_boolean (settings, "group-per-window");
+        FcitxConfigFileDesc *config_file_desc = get_fcitx_config_desc ();
 
-        FcitxShareStateConfig config = { { NULL } };
+        if (config_file_desc) {
+                /* Set Fcitx' share state setting based on the GSettings per-window option. */
+                GSettings *settings = g_settings_new ("org.gnome.libgnomekbd.desktop");
+                gboolean per_window = g_settings_get_boolean (settings, "group-per-window");
 
-        /* Load the user's Fcitx configuration. */
-        FILE *file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "r", NULL);
-        FcitxConfigFile *config_file = FcitxConfigParseConfigFileFp (file, get_fcitx_config_desc ());
-        FcitxShareStateConfigConfigBind (&config, config_file, get_fcitx_config_desc ());
+                FcitxShareStateConfig config = { { NULL } };
 
-        if (file)
-                fclose (file);
+                /* Load the user's Fcitx configuration. */
+                FILE *file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "r", NULL);
+                FcitxConfigFile *config_file = FcitxConfigParseConfigFileFp (file, config_file_desc);
+                FcitxShareStateConfigConfigBind (&config, config_file, config_file_desc);
 
-        config.share_state = per_window ? 0 : 1;
+                if (file)
+                        fclose (file);
 
-        /* Save the user's Fcitx configuration. */
-        file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "w", NULL);
-        FcitxConfigSaveConfigFileFp (file, &config.config, get_fcitx_config_desc ());
+                config.share_state = per_window ? 0 : 1;
 
-        if (file)
-                fclose (file);
+                /* Save the user's Fcitx configuration. */
+                file = FcitxXDGGetFileUserWithPrefix (NULL, "config", "w", NULL);
+                FcitxConfigSaveConfigFileFp (file, &config.config, config_file_desc);
 
-        fcitx_input_method_reload_config (manager->priv->fcitx);
+                if (file)
+                        fclose (file);
 
-        g_object_unref (settings);
+                fcitx_input_method_reload_config (manager->priv->fcitx);
+
+                g_object_unref (settings);
+        }
 }
 
 static void

@@ -1,3 +1,13 @@
+unity-settings-daemon (15.04.1+15.04.20150313-0ubuntu1) vivid; urgency=medium
+
+  [ William Hua ]
+  * Remove fcitx-data from Recommends and check if the required file,
+    config.desc, is available at runtime. Trying to dist-upgrade
+    currently pulls in the fcitx-bin which is higher priority than ibus.
+    (LP: #1430971)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Fri, 13 Mar 2015 12:54:01 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150310-0ubuntu1) vivid; urgency=medium
 
   [ William Hua ]
