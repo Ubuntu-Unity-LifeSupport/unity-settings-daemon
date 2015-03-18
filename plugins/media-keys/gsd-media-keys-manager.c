@@ -2424,25 +2424,6 @@ do_keyboard_brightness_action (GsdMediaKeysManager *manager,
 }
 
 static void
-do_battery_action (GsdMediaKeysManager *manager)
-{
-        GVariant *icon_var, *percentage;
-        char *label = NULL;
-
-        if (manager->priv->power_proxy == NULL)
-                return;
-
-        icon_var = g_dbus_proxy_get_cached_property (manager->priv->power_proxy, "Icon");
-        percentage = g_dbus_proxy_get_cached_property (manager->priv->power_proxy, "Percentage");
-
-        if (g_variant_get_double (percentage) >= 0.0)
-                label = g_strdup_printf ("%d %%", (int) g_variant_get_double (percentage));
-
-        show_osd (manager, g_variant_get_string (icon_var, NULL),
-                  label, g_variant_get_double (percentage));
-        g_free (label);
-}
-static void
 do_screenshot_action (GsdMediaKeysManager *manager,
                       MediaKeyType         type)
 {
@@ -2632,7 +2613,7 @@ do_action (GsdMediaKeysManager *manager,
                 do_keyboard_brightness_action (manager, type);
                 break;
         case BATTERY_KEY:
-                do_battery_action (manager);
+                do_execute_desktop_or_desktop (manager, "gnome-power-statistics.desktop", "", timestamp);
                 break;
         case SWITCH_INPUT_SOURCE_KEY:
         case SWITCH_INPUT_SOURCE_BACKWARD_KEY:

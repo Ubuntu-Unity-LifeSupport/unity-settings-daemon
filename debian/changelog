@@ -1,3 +1,22 @@
+unity-settings-daemon (15.04.1+15.04.20150318-0ubuntu1) vivid; urgency=medium
+
+  [ Ryan Tandy ]
+  * Don't call XSyncQueryCounter with a null counter. Avoids a crash
+    under FreeNX/X2Go which don't support the IDLETIME counter. (LP:
+    #1416081)
+
+  [ Sebastien Bacher ]
+  * Open the battery info dialog when using the corresponding hotkey.
+    The current code was trying to display a notification with the info
+    but we don't have design on how that should look like with notify-
+    osd so go back to what we were doing before (LP: #1432976)
+  * Restore code that set the scaling factor according the screen dpi,
+    but only when not under and Unity session. That was desactived in
+    r4020 because Unity is handling those values, but this is not the
+    case under ubiquity or unity-greeter. (LP: #1286878)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Wed, 18 Mar 2015 12:07:44 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150313-0ubuntu1) vivid; urgency=medium
 
   [ William Hua ]
