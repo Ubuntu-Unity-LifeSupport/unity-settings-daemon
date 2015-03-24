@@ -2734,6 +2734,7 @@ static void
 on_accelerator_activated (ShellKeyGrabber     *grabber,
                           guint                accel_id,
                           guint                deviceid,
+                          guint                timestamp,
                           GsdMediaKeysManager *manager)
 {
         guint i;
@@ -2747,9 +2748,9 @@ on_accelerator_activated (ShellKeyGrabber     *grabber,
                         continue;
 
                 if (key->key_type == CUSTOM_KEY)
-                        do_custom_action (manager, deviceid, key, GDK_CURRENT_TIME);
+                        do_custom_action (manager, deviceid, key, timestamp);
                 else
-                        do_action (manager, deviceid, key->key_type, GDK_CURRENT_TIME);
+                        do_action (manager, deviceid, key->key_type, timestamp);
                 return;
         }
 }

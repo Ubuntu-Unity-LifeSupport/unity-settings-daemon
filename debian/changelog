@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+15.04.20150324.1-0ubuntu1) vivid; urgency=medium
+
+  [ CI Train Bot ]
+  * New rebuild forced.
+
+  [ Sebastien Bacher ]
+  * use timestamp provided by compiz to run keybinding commands so focus
+    works (LP: #1433648)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 24 Mar 2015 16:09:44 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150318-0ubuntu1) vivid; urgency=medium
 
   [ Ryan Tandy ]

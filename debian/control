@@ -69,7 +69,7 @@ Breaks: rhythmbox (<< 0.11.5),
         gnome-session (<< 3.9.90-0ubuntu6),
         gnome-screensaver (<< 2.28.0),
         gnome-color-manager (<< 3.0),
-        unity (<< 7.1.2+14.04.20140214.1-0ubuntu1),
+        unity (<< 7.3.2),
         unity-greeter (<< 0.2.1-0ubuntu1),
         indicator-datetime (<< 12.10.3daily13.03.26)
 Suggests: x11-xserver-utils,
