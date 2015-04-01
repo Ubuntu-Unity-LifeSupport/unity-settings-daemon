@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+15.04.20150401-0ubuntu1) vivid; urgency=medium
+
+  [ Ryan Tandy ]
+  * gsd_idle_monitor_get_idletime() has to return a value. Use the
+    correct macro for that. Fixes r4073. (LP: #1416081)
+
+  [ Sebastien Bacher ]
+  * let the label wrap as they should in the mount dialog
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Wed, 01 Apr 2015 10:40:40 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150324.1-0ubuntu1) vivid; urgency=medium
 
   [ CI Train Bot ]

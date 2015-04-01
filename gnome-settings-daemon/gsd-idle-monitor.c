@@ -656,7 +656,7 @@ gsd_idle_monitor_get_idletime (GsdIdleMonitor *monitor)
 {
   XSyncValue value;
 
-  g_return_if_fail (GSD_IS_IDLE_MONITOR (monitor));
+  g_return_val_if_fail (GSD_IS_IDLE_MONITOR (monitor), -1);
 
   if (monitor->counter == None)
     return -1;
