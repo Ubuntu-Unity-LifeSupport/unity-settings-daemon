@@ -455,6 +455,12 @@ get_window_scale (GnomeXSettingsManager *manager)
                 if (g_strcmp0 (g_getenv ("XDG_CURRENT_DESKTOP"), "Unity") == 0)
                         goto out;
 
+                /* Don't scale under unity-greeter, it creates issues, 
+                   that can be revisited once bug #1286878 and #1434094 are
+                   resolved */
+                if (g_strcmp0 (g_getenv ("XDG_SESSION_CLASS"), "greeter") == 0)
+                        goto out;
+
                 display = gdk_display_get_default ();
                 screen = gdk_display_get_default_screen (display);
                 gdk_screen_get_monitor_geometry (screen, 0, &rect);

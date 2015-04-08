@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+15.04.20150408-0ubuntu1) vivid; urgency=medium
+
+  [ Sebastien Bacher ]
+  * Don't scale under unity-greeter, it creates issues. That can be
+    revisited once bug #1286878 and #1434094 are resolved but that's not
+    going to be for this cycle (LP: #1434094, #1286878)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Wed, 08 Apr 2015 14:46:48 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150401-0ubuntu1) vivid; urgency=medium
 
   [ Ryan Tandy ]
