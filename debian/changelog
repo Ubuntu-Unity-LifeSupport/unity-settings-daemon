@@ -1,3 +1,17 @@
+unity-settings-daemon (15.04.1+15.10.20150630.1-0ubuntu1) wily; urgency=medium
+
+  [ CI Train Bot ]
+  * New rebuild forced.
+
+  [ Dmitry Shachnev ]
+  * xsettings: fix some settings not being updated with the latest glib
+
+  [ Marco Trevisan (Treviño) ]
+  * AutoMount: also try to connect to Unity Session and delay automounts
+    when locked (LP: #1438870)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 30 Jun 2015 15:48:02 +0000
+
 unity-settings-daemon (15.04.1+15.04.20150408-0ubuntu1) vivid; urgency=medium
 
   [ Sebastien Bacher ]
