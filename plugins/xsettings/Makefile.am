@@ -42,6 +42,7 @@ test_wm_button_layout_translations_CFLAGS =	\
 
 test_wm_button_layout_translations_LDADD =	\
 	$(XSETTINGS_LIBS)			\
+	$(SETTINGS_PLUGIN_LIBS)			\
 	$(NULL)
 
 libexec_PROGRAMS = usd-test-xsettings
