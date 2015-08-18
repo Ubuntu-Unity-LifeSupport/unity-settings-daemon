@@ -44,6 +44,8 @@
 #include <X11/keysym.h>
 #include <X11/Xatom.h>
 
+#include <gdesktop-enums.h>
+
 #include <X11/extensions/XInput.h>
 #include <X11/extensions/XIproto.h>
 
@@ -51,30 +53,28 @@
 #include "gsd-mouse-manager.h"
 #include "gsd-input-helper.h"
 #include "gsd-enums.h"
+#include "gsd-settings-migrate.h"
 
 #define GSD_MOUSE_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_MOUSE_MANAGER, GsdMouseManagerPrivate))
 
-#define SETTINGS_MOUSE_DIR         "org.gnome.settings-daemon.peripherals.mouse"
-#define SETTINGS_TOUCHPAD_DIR      "org.gnome.settings-daemon.peripherals.touchpad"
+#define GSD_SETTINGS_MOUSE_SCHEMA  "org.gnome.settings-daemon.peripherals.mouse"
+#define GSETTINGS_MOUSE_SCHEMA     "org.gnome.desktop.peripherals.mouse"
+#define GSETTINGS_TOUCHPAD_SCHEMA  "org.gnome.desktop.peripherals.touchpad"
 
 /* Keys for both touchpad and mouse */
 #define KEY_LEFT_HANDED         "left-handed"                /* a boolean for mouse, an enum for touchpad */
-#define KEY_MOTION_ACCELERATION "motion-acceleration"
-#define KEY_MOTION_THRESHOLD    "motion-threshold"
+#define KEY_SPEED               "speed"
 
 /* Touchpad settings */
-#define KEY_TOUCHPAD_DISABLE_W_TYPING    "disable-while-typing"
-#define KEY_PAD_HORIZ_SCROLL             "horiz-scroll-enabled"
 #define KEY_SCROLL_METHOD                "scroll-method"
 #define KEY_TAP_TO_CLICK                 "tap-to-click"
-#define KEY_TOUCHPAD_ENABLED             "touchpad-enabled"
+#define KEY_SEND_EVENTS                  "send-events"
 #define KEY_NATURAL_SCROLL_ENABLED       "natural-scroll"
 
 /* Mouse settings */
 #define KEY_LOCATE_POINTER               "locate-pointer"
 #define KEY_DWELL_CLICK_ENABLED          "dwell-click-enabled"
 #define KEY_SECONDARY_CLICK_ENABLED      "secondary-click-enabled"
-#define KEY_MIDDLE_BUTTON_EMULATION      "middle-button-enabled"
 
 struct GsdMouseManagerPrivate
 {
@@ -82,6 +82,7 @@ struct GsdMouseManagerPrivate
         GSettings *touchpad_settings;
         GSettings *mouse_settings;
         GSettings *mouse_a11y_settings;
+        GSettings *gsd_mouse_settings;
         GdkDeviceManager *device_manager;
         guint device_added_id;
         guint device_removed_id;
@@ -408,6 +409,7 @@ set_motion (GsdMouseManager *manager,
         gfloat motion_acceleration;
         int motion_threshold;
         GSettings *settings;
+        gdouble speed;
         guint i;
 
         xdevice = open_gdk_device (device);
@@ -421,8 +423,11 @@ set_motion (GsdMouseManager *manager,
         else
                 settings = manager->priv->mouse_settings;
 
-        /* Calculate acceleration */
-        motion_acceleration = g_settings_get_double (settings, KEY_MOTION_ACCELERATION);
+        speed = g_settings_get_double (settings, KEY_SPEED);
+
+        /* Calculate acceleration and threshold */
+        motion_acceleration = (speed + 1) * 5; /* speed is [-1..1], map to [0..10] */
+        motion_threshold = CLAMP (10 - floor (motion_acceleration), 1, 10);
 
         if (motion_acceleration >= 1.0) {
                 /* we want to get the acceleration, with a resolution of 0.5
@@ -449,8 +454,6 @@ set_motion (GsdMouseManager *manager,
                 denominator = -1;
         }
 
-        /* And threshold */
-        motion_threshold = g_settings_get_int (settings, KEY_MOTION_THRESHOLD);
 
         /* Get the list of feedbacks for the device */
         states = XGetFeedbackControl (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdevice, &num_feedbacks);
@@ -487,52 +490,6 @@ set_motion (GsdMouseManager *manager,
         XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdevice);
 }
 
-static void
-set_middle_button (GsdMouseManager *manager,
-                   GdkDevice       *device,
-                   gboolean         middle_button)
-{
-        Atom prop;
-        XDevice *xdevice;
-        Atom type;
-        int format;
-        unsigned long nitems, bytes_after;
-        unsigned char *data;
-        int rc;
-
-        prop = XInternAtom (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()),
-                            "Evdev Middle Button Emulation", True);
-
-        if (!prop) /* no evdev devices */
-                return;
-
-        xdevice = open_gdk_device (device);
-        if (xdevice == NULL)
-                return;
-
-	g_debug ("setting middle button on %s", gdk_device_get_name (device));
-
-        gdk_error_trap_push ();
-
-        rc = XGetDeviceProperty (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()),
-                            xdevice, prop, 0, 1, False, XA_INTEGER, &type, &format,
-                            &nitems, &bytes_after, &data);
-
-        if (rc == Success && format == 8 && type == XA_INTEGER && nitems == 1) {
-                data[0] = middle_button ? 1 : 0;
-
-                XChangeDeviceProperty (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()),
-                                       xdevice, prop, type, format, PropModeReplace, data, nitems);
-        }
-
-        if (gdk_error_trap_pop ())
-                g_warning ("Error in setting middle button emulation on \"%s\"", gdk_device_get_name (device));
-
-        if (rc == Success)
-                XFree (data);
-
-        XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdevice);
-}
 
 /* Ensure that syndaemon dies together with us, to avoid running several of
  * them */
@@ -602,7 +559,6 @@ set_disable_w_typing (GsdMouseManager *manager, gboolean state)
 
                 if (error) {
                         g_warning ("Failed to launch syndaemon: %s", error->message);
-                        g_settings_set_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING, FALSE);
                         g_error_free (error);
                 } else {
                         g_child_watch_add (manager->priv->syndaemon_pid, syndaemon_died, manager);
@@ -889,7 +845,7 @@ set_locate_pointer (GsdMouseManager *manager,
                 manager->priv->locate_pointer_spawned = (error == NULL);
 
                 if (error) {
-                        g_settings_set_boolean (manager->priv->mouse_settings, KEY_LOCATE_POINTER, FALSE);
+                        g_settings_set_boolean (manager->priv->gsd_mouse_settings, KEY_LOCATE_POINTER, FALSE);
                         g_error_free (error);
                 }
 
@@ -963,6 +919,22 @@ get_touchpad_handedness (GsdMouseManager *manager, gboolean mouse_left_handed)
         }
 }
 
+static gboolean
+get_touchpad_enabled (GsdMouseManager *manager)
+{
+        GDesktopDeviceSendEvents send_events;
+
+        send_events = g_settings_get_enum (manager->priv->touchpad_settings, KEY_SEND_EVENTS);
+
+        if (send_events == G_DESKTOP_DEVICE_SEND_EVENTS_DISABLED_ON_EXTERNAL_MOUSE) {
+                /* FIXME: mouse_is_present() also finds internal ones... */
+                return (!mouse_is_present () && !trackball_is_present ());
+
+        }
+
+        return send_events == G_DESKTOP_DEVICE_SEND_EVENTS_ENABLED ? TRUE : FALSE;
+}
+
 static void
 set_mouse_settings (GsdMouseManager *manager,
                     GdkDevice       *device)
@@ -974,13 +946,12 @@ set_mouse_settings (GsdMouseManager *manager,
         set_left_handed (manager, device, mouse_left_handed, touchpad_left_handed);
 
         set_motion (manager, device);
-        set_middle_button (manager, device, g_settings_get_boolean (manager->priv->mouse_settings, KEY_MIDDLE_BUTTON_EMULATION));
 
         set_tap_to_click (device, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TAP_TO_CLICK), touchpad_left_handed);
         set_scroll_method (manager, device, g_settings_get_enum (manager->priv->touchpad_settings, KEY_SCROLL_METHOD));
-        set_horiz_scroll (device, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_PAD_HORIZ_SCROLL));
+        set_horiz_scroll (device, TRUE);
         set_natural_scroll (manager, device, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_NATURAL_SCROLL_ENABLED));
-        if (g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_ENABLED) == FALSE)
+        if (!get_touchpad_enabled (manager))
                 set_touchpad_disabled (device);
 }
 
@@ -1075,11 +1046,8 @@ mouse_callback (GSettings       *settings,
                         gboolean mouse_left_handed;
                         mouse_left_handed = g_settings_get_boolean (settings, KEY_LEFT_HANDED);
                         set_left_handed (manager, device, mouse_left_handed, get_touchpad_handedness (manager, mouse_left_handed));
-                } else if (g_str_equal (key, KEY_MOTION_ACCELERATION) ||
-                           g_str_equal (key, KEY_MOTION_THRESHOLD)) {
+                } else if (g_str_equal (key, KEY_SPEED)) {
                         set_motion (manager, device);
-                } else if (g_str_equal (key, KEY_MIDDLE_BUTTON_EMULATION)) {
-                        set_middle_button (manager, device, g_settings_get_boolean (settings, KEY_MIDDLE_BUTTON_EMULATION));
                 }
         }
         g_list_free (devices);
@@ -1091,11 +1059,6 @@ touchpad_callback (GSettings       *settings,
                    GsdMouseManager *manager)
 {
         GList *devices, *l;
-
-        if (g_str_equal (key, KEY_TOUCHPAD_DISABLE_W_TYPING)) {
-                set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, key));
-                return;
-        }
 
         devices = gdk_device_manager_list_devices (manager->priv->device_manager, GDK_DEVICE_TYPE_SLAVE);
 
@@ -1112,16 +1075,13 @@ touchpad_callback (GSettings       *settings,
                                           get_touchpad_handedness (manager, mouse_left_handed));
                 } else if (g_str_equal (key, KEY_SCROLL_METHOD)) {
                         set_scroll_method (manager, device, g_settings_get_enum (settings, key));
-                        set_horiz_scroll (device, g_settings_get_boolean (settings, KEY_PAD_HORIZ_SCROLL));
-                } else if (g_str_equal (key, KEY_PAD_HORIZ_SCROLL)) {
-                        set_horiz_scroll (device, g_settings_get_boolean (settings, key));
-                } else if (g_str_equal (key, KEY_TOUCHPAD_ENABLED)) {
-                        if (g_settings_get_boolean (settings, key) == FALSE)
+                        set_horiz_scroll (device, TRUE);
+                } else if (g_str_equal (key, KEY_SEND_EVENTS)) {
+                        if (!get_touchpad_enabled (manager))
                                 set_touchpad_disabled (device);
                         else
                                 set_touchpad_enabled (gdk_x11_device_get_id (device));
-                } else if (g_str_equal (key, KEY_MOTION_ACCELERATION) ||
-                           g_str_equal (key, KEY_MOTION_THRESHOLD)) {
+                } else if (g_str_equal (key, KEY_SPEED)) {
                         set_motion (manager, device);
                 } else if (g_str_equal (key, KEY_LEFT_HANDED)) {
                         gboolean mouse_left_handed;
@@ -1133,8 +1093,8 @@ touchpad_callback (GSettings       *settings,
         }
         g_list_free (devices);
 
-        if (g_str_equal (key, KEY_TOUCHPAD_ENABLED) &&
-            g_settings_get_boolean (settings, key)) {
+        if (g_str_equal (key, KEY_SEND_EVENTS) &&
+            get_touchpad_enabled (manager)) {
                 devices = get_disabled_devices (manager->priv->device_manager);
                 for (l = devices; l != NULL; l = l->next) {
                         int device_id;
@@ -1150,8 +1110,34 @@ touchpad_callback (GSettings       *settings,
 static void
 ensure_touchpad_active (GsdMouseManager *manager)
 {
-        if (mouse_is_present () == FALSE && touchscreen_is_present () == FALSE && trackball_is_present () == FALSE && touchpad_is_present ())
-                g_settings_set_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_ENABLED, TRUE);
+        GList *devices, *l;
+
+        if (get_touchpad_enabled (manager)) {
+                devices = get_disabled_devices (manager->priv->device_manager);
+                for (l = devices; l != NULL; l = l->next) {
+                        int device_id;
+
+                        device_id = GPOINTER_TO_INT (l->data);
+                        set_touchpad_enabled (device_id);
+                }
+                g_list_free (devices);
+        } else {
+                devices = gdk_device_manager_list_devices (manager->priv->device_manager,
+                                                           GDK_DEVICE_TYPE_SLAVE);
+
+                for (l = devices; l != NULL; l = l->next) {
+                        GdkDevice *device = l->data;
+
+                        if (device_is_ignored (manager, device))
+                                continue;
+                        if (gdk_device_get_source (device) != GDK_SOURCE_TOUCHPAD)
+                                continue;
+
+                        set_touchpad_disabled (device);
+                }
+
+                g_list_free (devices);
+        }
 }
 
 static void
@@ -1170,7 +1156,10 @@ device_added_cb (GdkDeviceManager *device_manager,
                 }
 
                 /* If a touchpad was to appear... */
-                set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING));
+                set_disable_w_typing (manager, TRUE);
+
+                /* If a mouse was to appear... */
+                ensure_touchpad_active (manager);
         }
 }
 
@@ -1191,7 +1180,7 @@ device_removed_cb (GdkDeviceManager *device_manager,
                 run_custom_command (device, COMMAND_DEVICE_REMOVED);
 
                 /* If a touchpad was to disappear... */
-                set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING));
+                set_disable_w_typing (manager, TRUE);
 
                 if (gdk_device_get_source (device) != GDK_SOURCE_TOUCHPAD)
                         ensure_touchpad_active (manager);
@@ -1228,25 +1217,29 @@ gsd_mouse_manager_idle_cb (GsdMouseManager *manager)
 
         set_devicepresence_handler (manager);
 
-        manager->priv->mouse_settings = g_settings_new (SETTINGS_MOUSE_DIR);
-        g_signal_connect (manager->priv->mouse_settings, "changed",
-                          G_CALLBACK (mouse_callback), manager);
+        manager->priv->gsd_mouse_settings = g_settings_new (GSD_SETTINGS_MOUSE_SCHEMA);
+        g_signal_connect (manager->priv->gsd_mouse_settings, "changed",
+                           G_CALLBACK (mouse_callback), manager);
 
         manager->priv->mouse_a11y_settings = g_settings_new ("org.gnome.desktop.a11y.mouse");
         g_signal_connect (manager->priv->mouse_a11y_settings, "changed",
                           G_CALLBACK (mouse_callback), manager);
 
-        manager->priv->touchpad_settings = g_settings_new (SETTINGS_TOUCHPAD_DIR);
+        manager->priv->mouse_settings = g_settings_new (GSETTINGS_MOUSE_SCHEMA);
+        g_signal_connect (manager->priv->mouse_settings, "changed",
+                          G_CALLBACK (mouse_callback), manager);
+
+        manager->priv->touchpad_settings = g_settings_new (GSETTINGS_TOUCHPAD_SCHEMA);
         g_signal_connect (manager->priv->touchpad_settings, "changed",
                           G_CALLBACK (touchpad_callback), manager);
 
         manager->priv->syndaemon_spawned = FALSE;
 
-        set_locate_pointer (manager, g_settings_get_boolean (manager->priv->mouse_settings, KEY_LOCATE_POINTER));
+        set_locate_pointer (manager, g_settings_get_boolean (manager->priv->gsd_mouse_settings, KEY_LOCATE_POINTER));
         set_mousetweaks_daemon (manager,
                                 g_settings_get_boolean (manager->priv->mouse_a11y_settings, KEY_DWELL_CLICK_ENABLED),
                                 g_settings_get_boolean (manager->priv->mouse_a11y_settings, KEY_SECONDARY_CLICK_ENABLED));
-        set_disable_w_typing (manager, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_DISABLE_W_TYPING));
+        set_disable_w_typing (manager, TRUE);
 
         devices = gdk_device_manager_list_devices (manager->priv->device_manager, GDK_DEVICE_TYPE_SLAVE);
         for (l = devices; l != NULL; l = l->next) {
@@ -1268,7 +1261,7 @@ gsd_mouse_manager_idle_cb (GsdMouseManager *manager)
 
         ensure_touchpad_active (manager);
 
-        if (g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TOUCHPAD_ENABLED)) {
+        if (get_touchpad_enabled (manager)) {
                 devices = get_disabled_devices (manager->priv->device_manager);
                 for (l = devices; l != NULL; l = l->next) {
                         int device_id;
@@ -1349,12 +1342,81 @@ gsd_mouse_manager_finalize (GObject *object)
         G_OBJECT_CLASS (gsd_mouse_manager_parent_class)->finalize (object);
 }
 
+static GVariant *
+map_speed (GVariant *variant)
+{
+        gdouble value;
+
+        value = g_variant_get_double (variant);
+
+        /* Remap from [0..10] to [-1..1] */
+        value = (value / 5) - 1;
+
+        return g_variant_new_double (value);
+}
+
+static GVariant *
+map_send_events (GVariant *variant)
+{
+        gboolean enabled;
+
+        enabled = g_variant_get_boolean (variant);
+
+        if (enabled) {
+                return g_variant_new_string ("enabled");
+        } else {
+                return g_variant_new_string ("disabled");
+        }
+}
+
+static void
+migrate_mouse_settings (void)
+{
+        GsdSettingsMigrateEntry trackball_entries[] = {
+                { "scroll-wheel-emulation-button", "scroll-wheel-emulation-button", NULL }
+        };
+        GsdSettingsMigrateEntry mouse_entries[] = {
+                { "left-handed",           "left-handed", NULL },
+                { "motion-acceleration",   "speed",       map_speed },
+                { "motion-threshold",      NULL,          NULL },
+                { "middle-button-enabled", NULL,          NULL },
+        };
+        GsdSettingsMigrateEntry touchpad_entries[] = {
+                { "disable-while-typing", NULL,             NULL },
+                { "horiz-scroll-enabled", NULL,             NULL },
+                { "scroll-method",        "scroll-method",  NULL },
+                { "tap-to-click",         "tap-to-click",   NULL },
+                { "touchpad-enabled",     "send-events",    map_send_events },
+                { "left-handed",          "left-handed",    NULL },
+                { "motion-acceleration",  "speed",          map_speed },
+                { "motion-threshold",     NULL,             NULL },
+                { "natural-scroll",       "natural-scroll", NULL }
+        };
+
+        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.trackball.deprecated",
+                                    "/org/gnome/settings-daemon/peripherals/trackball/",
+                                    "org.gnome.desktop.peripherals.trackball",
+                                    "/org/gnome/desktop/peripherals/trackball/",
+                                    trackball_entries, G_N_ELEMENTS (trackball_entries));
+        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.mouse.deprecated",
+                                    "/org/gnome/settings-daemon/peripherals/mouse/",
+                                    "org.gnome.desktop.peripherals.mouse",
+                                    "/org/gnome/desktop/peripherals/mouse/",
+                                    mouse_entries, G_N_ELEMENTS (mouse_entries));
+        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.touchpad.deprecated",
+                                    "/org/gnome/settings-daemon/peripherals/touchpad/",
+                                    "org.gnome.desktop.peripherals.touchpad",
+                                    "/org/gnome/desktop/peripherals/touchpad/",
+                                    touchpad_entries, G_N_ELEMENTS (touchpad_entries));
+}
+
 GsdMouseManager *
 gsd_mouse_manager_new (void)
 {
         if (manager_object != NULL) {
                 g_object_ref (manager_object);
         } else {
+                migrate_mouse_settings ();
                 manager_object = g_object_new (GSD_TYPE_MOUSE_MANAGER, NULL);
                 g_object_add_weak_pointer (manager_object,
                                            (gpointer *) &manager_object);

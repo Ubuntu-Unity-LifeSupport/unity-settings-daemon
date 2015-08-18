@@ -6,7 +6,9 @@ libcommon_la_SOURCES = \
 	gsd-keygrab.c		\
 	gsd-keygrab.h		\
 	gsd-input-helper.c	\
-	gsd-input-helper.h
+	gsd-input-helper.h  \
+	gsd-settings-migrate.c	\
+	gsd-settings-migrate.h
 
 libcommon_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
