@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+15.10.20150825-0ubuntu1) wily; urgency=medium
+
+  [ Alberto Milone ]
+  * Make touchscreen mapping non-blocking, and kill it if it takes more
+    than 3 seconds; finally, in case of failure, try again after a few
+    seconds. This helps on resume from S3 (LP: #1471708). (LP: #1471708)
+
+ -- CI Train Bot <ci-train-bot@canonical.com>  Tue, 25 Aug 2015 09:09:33 +0000
+
 unity-settings-daemon (15.04.1+15.10.20150818-0ubuntu1) wily; urgency=medium
 
   [ Carlos Garnacho ]
