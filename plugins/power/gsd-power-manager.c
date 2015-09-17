@@ -3330,6 +3330,8 @@ gsd_power_manager_start (GsdPowerManager *manager,
                           G_CALLBACK (lid_state_changed_cb), manager);
         g_signal_connect (manager->priv->up_client, "notify::on-battery",
                           G_CALLBACK (up_client_on_battery_cb), manager);
+        g_signal_connect_after (manager->priv->up_client, "notify::on-battery",
+                          G_CALLBACK (lid_state_changed_cb), manager);
 
         /* connect to UPower for keyboard backlight control */
         g_dbus_proxy_new_for_bus (G_BUS_TYPE_SYSTEM,
