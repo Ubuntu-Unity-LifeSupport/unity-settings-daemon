@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+15.10.20150930-0ubuntu1) wily; urgency=medium
+
+  [ Rui Matos ]
+  * Backport upstream commit (LP: #1496656)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Wed, 30 Sep 2015 15:47:07 +0000
+
 unity-settings-daemon (15.04.1+15.10.20150917-0ubuntu1) wily; urgency=medium
 
   [ Michael Terry ]

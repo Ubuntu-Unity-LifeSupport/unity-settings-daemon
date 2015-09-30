@@ -41,6 +41,8 @@
 #include <gio/gdesktopappinfo.h>
 #include <gio/gunixfdlist.h>
 
+#include <gdesktop-enums.h>
+
 #ifdef HAVE_GUDEV
 #include <gudev/gudev.h>
 #endif
@@ -114,8 +116,8 @@ static const gchar introspection_xml[] =
 #define SETTINGS_INTERFACE_DIR "org.gnome.desktop.interface"
 #define SETTINGS_POWER_DIR "org.gnome.settings-daemon.plugins.power"
 #define SETTINGS_XSETTINGS_DIR "org.gnome.settings-daemon.plugins.xsettings"
-#define SETTINGS_TOUCHPAD_DIR "org.gnome.settings-daemon.peripherals.touchpad"
-#define TOUCHPAD_ENABLED_KEY "touchpad-enabled"
+#define SETTINGS_TOUCHPAD_DIR "org.gnome.desktop.peripherals.touchpad"
+#define TOUCHPAD_ENABLED_KEY "send-events"
 #define HIGH_CONTRAST "HighContrast"
 
 #define VOLUME_STEP 6           /* percents for one volume button press */
@@ -1324,11 +1326,15 @@ do_touchpad_action (GsdMediaKeysManager *manager)
         }
 
         settings = g_settings_new (SETTINGS_TOUCHPAD_DIR);
-        state = g_settings_get_boolean (settings, TOUCHPAD_ENABLED_KEY);
+        state = (g_settings_get_enum (settings, TOUCHPAD_ENABLED_KEY) ==
+                 G_DESKTOP_DEVICE_SEND_EVENTS_ENABLED);
 
         do_touchpad_osd_action (manager, !state);
 
-        g_settings_set_boolean (settings, TOUCHPAD_ENABLED_KEY, !state);
+        g_settings_set_enum (settings, TOUCHPAD_ENABLED_KEY,
+                             !state ?
+                             G_DESKTOP_DEVICE_SEND_EVENTS_ENABLED :
+                             G_DESKTOP_DEVICE_SEND_EVENTS_DISABLED);
         g_object_unref (settings);
 }
 
