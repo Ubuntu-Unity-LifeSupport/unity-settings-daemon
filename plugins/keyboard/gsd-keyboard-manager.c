@@ -1330,7 +1330,6 @@ apply_input_source (GsdKeyboardManager *manager,
                 if (priv->is_fcitx_active && priv->fcitx) {
                         gchar *name = g_strdup_printf (FCITX_XKB_PREFIX "%s", id);
                         gchar *fcitx_name = get_fcitx_name (name);
-                        fcitx_input_method_activate (priv->fcitx);
                         fcitx_input_method_set_current_im (priv->fcitx, fcitx_name);
                         g_free (fcitx_name);
                         g_free (name);
@@ -1382,7 +1381,6 @@ apply_input_source (GsdKeyboardManager *manager,
                 if (priv->is_fcitx_active) {
                         if (priv->fcitx) {
                                 gchar *name = g_strdup (id);
-                                fcitx_input_method_activate (priv->fcitx);
                                 fcitx_input_method_set_current_im (priv->fcitx, name);
                                 g_free (name);
                         } else {

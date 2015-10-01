@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+15.10.20151001-0ubuntu1) wily; urgency=medium
+
+  [ Robert Ancell ]
+  * Fix shell watch callback not being destroyed. (LP: #1501576)
+
+  [ William Hua ]
+  * Don't call fcitx_input_method_activate (). It breaks fcitx' "extra
+    key for trigger input method" shortcut. (LP: #1494331)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Thu, 01 Oct 2015 09:45:25 +0000
+
 unity-settings-daemon (15.04.1+15.10.20150930-0ubuntu1) wily; urgency=medium
 
   [ Rui Matos ]
