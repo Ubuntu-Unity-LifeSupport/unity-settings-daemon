@@ -270,18 +270,7 @@ out:
         return should_purge;
 }
 
-typedef struct {
-        gint ref_count;
-        GFile           *file;
-        GCancellable    *cancellable;
-        GDateTime       *old;
-        gboolean         dry_run;
-        gboolean         trash;
-        gchar           *name;
-        gint             depth;
-} DeleteData;
-
-static DeleteData *
+DeleteData *
 delete_data_new (GFile        *file,
                  GCancellable *cancellable,
                  GDateTime    *old,
@@ -311,7 +300,7 @@ delete_data_ref (DeleteData *data)
   return data;
 }
 
-static void
+void
 delete_data_unref (DeleteData *data)
 {
         data->ref_count -= 1;
@@ -325,8 +314,6 @@ delete_data_unref (DeleteData *data)
         g_free (data->name);
         g_free (data);
 }
-
-static void delete_recursively_by_age (DeleteData *data);
 
 static void
 delete_batch (GObject      *source,
@@ -415,7 +402,6 @@ delete_subdir (GObject      *source,
         } else if (data->depth > 0 && g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_DIRECTORY)) {
                 if ((data->trash && data->depth > 1) ||
                      should_purge_file (data->file, data->cancellable, data->old)) {
-                        g_debug ("Purging %s leaf node", data->name);
                         if (!data->dry_run) {
                                 g_file_delete (data->file, data->cancellable, NULL);
                         }
@@ -428,6 +414,45 @@ delete_subdir (GObject      *source,
 }
 
 static void
+delete_subdir_check_symlink (GObject      *source,
+                             GAsyncResult *res,
+                             gpointer      user_data)
+{
+        GFile *file = G_FILE (source);
+        DeleteData *data = user_data;
+        GFileInfo *info;
+        GFileType type;
+
+        info = g_file_query_info_finish (file, res, NULL);
+        if (!info) {
+                delete_data_unref (data);
+                return;
+        }
+
+        type = g_file_info_get_file_type (info);
+        g_object_unref (info);
+
+        if (type == G_FILE_TYPE_SYMBOLIC_LINK) {
+                if (should_purge_file (data->file, data->cancellable, data->old)) {
+                        g_debug ("Purging %s leaf node", data->name);
+                        if (!data->dry_run) {
+                                g_file_delete (data->file, data->cancellable, NULL);
+                        }
+                }
+        } else {
+                g_file_enumerate_children_async (data->file,
+                                                 G_FILE_ATTRIBUTE_STANDARD_NAME ","
+                                                 G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                                 G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                                 0,
+                                                 data->cancellable,
+                                                 delete_subdir,
+                                                 delete_data_ref (data));
+        }
+        delete_data_unref (data);
+}
+
+void
 delete_recursively_by_age (DeleteData *data)
 {
         if (data->trash && (data->depth == 1) &&
@@ -436,14 +461,13 @@ delete_recursively_by_age (DeleteData *data)
                 return;
         }
 
-        g_file_enumerate_children_async (data->file,
-                                         G_FILE_ATTRIBUTE_STANDARD_NAME ","
-                                         G_FILE_ATTRIBUTE_STANDARD_TYPE,
-                                         G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                         0,
-                                         data->cancellable,
-                                         delete_subdir,
-                                         delete_data_ref (data));
+        g_file_query_info_async (data->file,
+                                 G_FILE_ATTRIBUTE_STANDARD_TYPE,
+                                 G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                 0,
+                                 data->cancellable,
+                                 delete_subdir_check_symlink,
+                                 delete_data_ref (data));
 }
 
 void

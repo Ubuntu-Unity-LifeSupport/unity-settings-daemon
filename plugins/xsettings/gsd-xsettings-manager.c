@@ -660,6 +660,8 @@ xft_settings_set_xresources (GnomeXftSettings *settings)
                                 settings->hintstyle);
         update_property (add_string, "Xft.rgba",
                                 settings->rgba);
+        update_property (add_string, "Xcursor.size",
+                                g_ascii_dtostr (dpibuf, sizeof (dpibuf), (double) settings->cursor_size));
 
         g_debug("xft_settings_set_xresources: new res '%s'", add_string->str);
 
@@ -885,7 +887,7 @@ find_translation_entry (GSettings *settings, const char *key)
         guint i;
         char *schema;
 
-        g_object_get (settings, "schema", &schema, NULL);
+        g_object_get (settings, "schema-id", &schema, NULL);
 
         for (i = 0; i < G_N_ELEMENTS (translations); i++) {
                 if (g_str_equal (schema, translations[i].gsettings_schema) &&
@@ -910,7 +912,8 @@ xsettings_callback (GSettings             *settings,
         GVariant         *value;
 
         if (g_str_equal (key, TEXT_SCALING_FACTOR_KEY) ||
-            g_str_equal (key, SCALING_FACTOR_KEY)) {
+            g_str_equal (key, SCALING_FACTOR_KEY) ||
+            g_str_equal (key, CURSOR_SIZE_KEY)) {
         	xft_callback (NULL, key, manager);
         	return;
 	}
@@ -1147,26 +1150,11 @@ gnome_xsettings_manager_stop (GnomeXSettingsManager *manager)
         }
 }
 
-static GObject *
-gnome_xsettings_manager_constructor (GType                  type,
-                                     guint                  n_construct_properties,
-                                     GObjectConstructParam *construct_properties)
-{
-        GnomeXSettingsManager      *xsettings_manager;
-
-        xsettings_manager = GNOME_XSETTINGS_MANAGER (G_OBJECT_CLASS (gnome_xsettings_manager_parent_class)->constructor (type,
-                                                                                                                  n_construct_properties,
-                                                                                                                  construct_properties));
-
-        return G_OBJECT (xsettings_manager);
-}
-
 static void
 gnome_xsettings_manager_class_init (GnomeXSettingsManagerClass *klass)
 {
         GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-        object_class->constructor = gnome_xsettings_manager_constructor;
         object_class->finalize = gnome_xsettings_manager_finalize;
 
         g_type_class_add_private (klass, sizeof (GnomeXSettingsManagerPrivate));

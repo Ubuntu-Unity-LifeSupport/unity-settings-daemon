@@ -168,7 +168,7 @@ wacom_set_property (GsdWacomDevice *device,
 
 	xdev = open_device (device);
 	device_set_property (xdev, gsd_wacom_device_get_tool_name (device), property);
-	XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdev);
+	xdevice_close (xdev);
 }
 
 static void
@@ -315,7 +315,7 @@ set_absolute (GsdWacomDevice  *device,
 	if (gdk_error_trap_pop ())
 		g_error ("Failed to set mode \"%s\" for \"%s\".",
 			 is_absolute ? "Absolute" : "Relative", gsd_wacom_device_get_tool_name (device));
-	XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdev);
+	xdevice_close (xdev);
 }
 
 static void
@@ -462,7 +462,7 @@ set_device_buttonmap (GsdWacomDevice *device,
 
 	g_free (map);
 
-	XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdev);
+	xdevice_close (xdev);
 }
 
 static void
@@ -688,7 +688,7 @@ reset_pad_buttons (GsdWacomDevice *device)
 	reset_touch_buttons (xdev, def_touchstrip_buttons, "Wacom Strip Buttons");
 	gdk_error_trap_pop_ignored ();
 
-	XCloseDevice (GDK_DISPLAY_XDISPLAY (gdk_display_get_default ()), xdev);
+	xdevice_close (xdev);
 
 	/* Reset all the LEDs */
 	buttons = gsd_wacom_device_get_buttons (device);

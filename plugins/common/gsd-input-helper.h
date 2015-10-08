@@ -84,6 +84,7 @@ int       xdevice_get_last_tool_id (int                     deviceid);
 gboolean  xdevice_get_dimensions   (int                     deviceid,
                                     guint                  *width,
                                     guint                  *height);
+void      xdevice_close      (XDevice                *xdevice);
 
 G_END_DECLS
 

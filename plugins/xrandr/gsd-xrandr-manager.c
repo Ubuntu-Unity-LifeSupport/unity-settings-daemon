@@ -157,6 +157,7 @@ static void get_allowed_rotations_for_output (GsdRRConfig *config,
                                               GsdRRRotation *out_rotations);
 static void handle_fn_f7 (GsdXrandrManager *mgr, guint32 timestamp);
 static void handle_rotate_windows (GsdXrandrManager *mgr, GsdRRRotation rotation, guint32 timestamp);
+static void register_manager_dbus (GsdXrandrManager *manager);
 
 G_DEFINE_TYPE (GsdXrandrManager, gsd_xrandr_manager, G_TYPE_OBJECT)
 
@@ -2414,6 +2415,8 @@ gsd_xrandr_manager_start (GsdXrandrManager *manager,
         manager->priv->running = TRUE;
         manager->priv->settings = g_settings_new (CONF_SCHEMA);
 
+        register_manager_dbus (manager_object);
+
         show_timestamps_dialog (manager, "Startup");
         if (!apply_stored_configuration_at_startup (manager, GDK_CURRENT_TIME)) /* we don't have a real timestamp at startup anyway */
                 if (!apply_default_configuration_from_file (manager, GDK_CURRENT_TIME))
@@ -2462,6 +2465,9 @@ gsd_xrandr_manager_stop (GsdXrandrManager *manager)
                 g_object_unref (manager->priv->upower_client);
                 manager->priv->upower_client = NULL;
         }
+
+        if (manager->priv->name_id != 0)
+                g_bus_unown_name (manager->priv->name_id);
 
         if (manager->priv->introspection_data) {
                 g_dbus_node_info_unref (manager->priv->introspection_data);
@@ -2521,9 +2527,6 @@ gsd_xrandr_manager_finalize (GObject *object)
         manager = GSD_XRANDR_MANAGER (object);
 
         g_return_if_fail (manager->priv != NULL);
-
-        if (manager->priv->name_id != 0)
-                g_bus_unown_name (manager->priv->name_id);
 
         G_OBJECT_CLASS (gsd_xrandr_manager_parent_class)->finalize (object);
 }
@@ -2669,8 +2672,6 @@ gsd_xrandr_manager_new (void)
                 manager_object = g_object_new (GSD_TYPE_XRANDR_MANAGER, NULL);
                 g_object_add_weak_pointer (manager_object,
                                            (gpointer *) &manager_object);
-
-                register_manager_dbus (manager_object);
         }
 
         return GSD_XRANDR_MANAGER (manager_object);
