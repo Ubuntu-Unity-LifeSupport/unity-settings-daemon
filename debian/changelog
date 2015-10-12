@@ -1,3 +1,15 @@
+unity-settings-daemon (15.04.1+15.10.20151012-0ubuntu1) wily; urgency=medium
+
+  [ "Jan Alexander Steffens (heftig)" ]
+  * xsettings: Export cursor theme on X RESOURCE_MANAGER and notify X on
+    changes (LP: #1505161)
+
+  [ Marco Trevisan (Treviño) ]
+  * xsettings: Export cursor theme on X RESOURCE_MANAGER and notify X on
+    changes (LP: #1505161)
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Mon, 12 Oct 2015 14:39:35 +0000
+
 unity-settings-daemon (15.04.1+15.10.20151008-0ubuntu1) wily; urgency=medium
 
   [ Bastien Nocera ]
