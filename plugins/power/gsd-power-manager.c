@@ -3430,6 +3430,9 @@ gsd_power_manager_start (GsdPowerManager *manager,
 void
 gsd_power_manager_stop (GsdPowerManager *manager)
 {
+        GPtrArray *devices;
+        int i;
+
         g_debug ("Stopping power manager");
 
         if (manager->priv->inhibit_lid_switch_timer_id != 0) {
@@ -3481,8 +3484,12 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         g_clear_object (&manager->priv->logind_proxy);
         g_clear_object (&manager->priv->rr_screen);
 
-        g_ptr_array_unref (manager->priv->devices_array);
+        devices = manager->priv->devices_array;
+        for (i = 0; i < devices->len; i++)
+                g_signal_handlers_disconnect_by_data (g_ptr_array_index (devices, i), manager);
+        g_ptr_array_unref (devices);
         manager->priv->devices_array = NULL;
+
         g_clear_object (&manager->priv->device_composite);
         g_clear_object (&manager->priv->previous_icon);
 

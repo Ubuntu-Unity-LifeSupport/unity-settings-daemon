@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+15.10.20151021-0ubuntu1) wily; urgency=medium
+
+  [ Lars Uebernickel ]
+  * power: disconnect from device's "notify" signals (LP: #1436861)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Wed, 21 Oct 2015 11:05:04 +0000
+
 unity-settings-daemon (15.04.1+15.10.20151012-0ubuntu1) wily; urgency=medium
 
   [ "Jan Alexander Steffens (heftig)" ]
