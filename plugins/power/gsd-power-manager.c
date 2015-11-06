@@ -3482,7 +3482,11 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         }
 
         g_clear_object (&manager->priv->logind_proxy);
-        g_clear_object (&manager->priv->rr_screen);
+
+        if (manager->priv->rr_screen) {
+                g_signal_handlers_disconnect_by_data (manager->priv->rr_screen, manager);
+                g_clear_object (&manager->priv->rr_screen);
+        }
 
         devices = manager->priv->devices_array;
         for (i = 0; i < devices->len; i++)

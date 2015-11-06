@@ -510,7 +510,7 @@ engine_from_locale (void)
                 { "bn_IN", "m17n:bn:inscript" },
                 { "gu_IN", "m17n:gu:inscript" },
                 { "hi_IN", "m17n:hi:inscript" },
-                { "ja_JP", "anthy" },
+                { "ja_JP", "mozc" },
                 { "kn_IN", "m17n:kn:kgp" },
                 { "ko_KR", "hangul" },
                 { "mai_IN", "m17n:mai:inscript" },
@@ -539,7 +539,7 @@ engine_from_locale (void)
 }
 
 static void
-add_ibus_sources_from_locale (GSettings *settings)
+add_sources_from_locale (GsdKeyboardManager *manager, GSettings *settings)
 {
         const gchar *locale_engine;
         GVariantBuilder builder;
@@ -549,7 +549,16 @@ add_ibus_sources_from_locale (GSettings *settings)
                 return;
 
         init_builder_with_sources (&builder, settings);
-        g_variant_builder_add (&builder, "(ss)", INPUT_SOURCE_TYPE_IBUS, locale_engine);
+#ifdef HAVE_IBUS
+        if (manager->priv->is_ibus_active) {
+                g_variant_builder_add (&builder, "(ss)", INPUT_SOURCE_TYPE_IBUS, locale_engine);
+        }
+#endif
+#ifdef HAVE_FCITX
+        if (manager->priv->is_fcitx_active) {
+                g_variant_builder_add (&builder, "(ss)", INPUT_SOURCE_TYPE_FCITX, locale_engine);
+        }
+#endif
         g_settings_set_value (settings, KEY_INPUT_SOURCES, g_variant_builder_end (&builder));
 }
 
@@ -2134,8 +2143,8 @@ maybe_create_initial_settings (GsdKeyboardManager *manager)
         sources = g_settings_get_value (settings, KEY_INPUT_SOURCES);
         if (g_variant_n_children (sources) < 1) {
                 get_sources_from_xkb_config (manager);
-#ifdef HAVE_IBUS
-                add_ibus_sources_from_locale (settings);
+#if defined(HAVE_IBUS) || defined(HAVE_FCITX)
+                add_sources_from_locale (manager, settings);
 #endif
         }
         g_variant_unref (sources);

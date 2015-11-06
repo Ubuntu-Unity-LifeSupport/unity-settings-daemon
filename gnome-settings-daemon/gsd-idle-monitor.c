@@ -950,11 +950,6 @@ init_xsync_global (void)
         xsync->have_xsync = TRUE;
         XSyncSetPriority (xsync->display, None, 10);
       }
-
-    g_warning ("Attempted to init Xsync, found version %d.%d error base %d event base %d\n",
-                  major, minor,
-                  xsync->sync_error_base,
-                  xsync->sync_event_base);
 }
 
 void
