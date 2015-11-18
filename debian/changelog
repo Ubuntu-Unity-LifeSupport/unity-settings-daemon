@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+16.04.20151118.1-0ubuntu1) xenial; urgency=medium
+
+  [ Shih-Yuan Lee (FourDollars) ]
+  * power: On raw backlight types, clamp the value to a minumum (LP:
+    #1381625) gsd-rr: Apply the similar method from power plugin to fix
+    the lowest brightness issue. (LP: #1381625) (LP: #1381625)
+
+ -- Shih-Yuan Lee <ci-train-bot@canonical.com>  Wed, 18 Nov 2015 09:36:58 +0000
+
 unity-settings-daemon (15.04.1+16.04.20151106-0ubuntu1) xenial; urgency=medium
 
   [ CI Train Bot ]

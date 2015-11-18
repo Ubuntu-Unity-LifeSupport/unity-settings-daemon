@@ -1551,6 +1551,11 @@ update_brightness_limits (GsdRROutput *output)
     }
     output->backlight_min = info->values[0];
     output->backlight_max = info->values[1];
+    /* If the interface has more than 99 possible values, it's
+     * likely that 0 turns the backlight off so we let 1 be
+     * set in that case. */
+    if (output->backlight_max > 99 && output->backlight_min == 0)
+        output->backlight_min = 1;
 out:
     if (info != NULL)
     {

@@ -1246,7 +1246,7 @@ backlight_available (GsdRRScreen *rr_screen)
 #endif
         if (get_primary_output (rr_screen) != NULL)
                 return TRUE;
-        path = gsd_backlight_helper_get_best_backlight ();
+        path = gsd_backlight_helper_get_best_backlight (NULL);
         if (path == NULL)
                 return FALSE;
 

@@ -44,7 +44,7 @@ gsd_backlight_helper_get_type (GList *devices, const gchar *type)
 #endif /* HAVE_GUDEV */
 
 char *
-gsd_backlight_helper_get_best_backlight (void)
+gsd_backlight_helper_get_best_backlight (GsdBacklightType *type)
 {
 #ifdef HAVE_GUDEV
 	gchar *path = NULL;
@@ -59,14 +59,23 @@ gsd_backlight_helper_get_best_backlight (void)
 	/* search the backlight devices and prefer the types:
 	 * firmware -> platform -> raw */
 	path = gsd_backlight_helper_get_type (devices, "firmware");
-	if (path != NULL)
+	if (path != NULL) {
+		if (type)
+			*type = GSD_BACKLIGHT_TYPE_FIRMWARE;
 		goto out;
+	}
 	path = gsd_backlight_helper_get_type (devices, "platform");
-	if (path != NULL)
+	if (path != NULL) {
+		if (type)
+			*type = GSD_BACKLIGHT_TYPE_PLATFORM;
 		goto out;
+	}
 	path = gsd_backlight_helper_get_type (devices, "raw");
-	if (path != NULL)
+	if (path != NULL) {
+		if (type)
+			*type = GSD_BACKLIGHT_TYPE_RAW;
 		goto out;
+	}
 out:
 	g_object_unref (client);
 	g_list_foreach (devices, (GFunc) g_object_unref, NULL);
