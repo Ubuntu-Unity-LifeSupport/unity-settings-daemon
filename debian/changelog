@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+16.04.20151118.1-0ubuntu2) xenial; urgency=high
+
+  * Fix build-dependencies to use new libystemd-dev package.name.
+
+ -- Dimitri John Ledkov <xnox@ubuntu.com>  Mon, 07 Dec 2015 10:54:09 +0000
+
 unity-settings-daemon (15.04.1+16.04.20151118.1-0ubuntu1) xenial; urgency=medium
 
   [ Shih-Yuan Lee (FourDollars) ]
