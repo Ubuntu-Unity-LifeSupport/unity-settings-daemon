@@ -42,10 +42,13 @@ typedef struct headset_ports {
     const pa_card_port_info *headphones, *headsetmic, *headphonemic;
 } headset_ports;
 
-/* In PulseAudio ports will show up with the following names:
+/* 
+   TODO: Check if we still need this with the changed PA port names
+
+   In PulseAudio ports will show up with the following names:
    Headphones - analog-output-headphones
-   Headset mic - analog-input-microphone-headset
-   Jack in mic-in mode - analog-input-microphone
+   Headset mic - analog-input-headset-mic (was: analog-input-microphone-headset)
+   Jack in mic-in mode - analog-input-headphone-mic (was: analog-input-microphone)
 
    However, since regular mics also show up as analog-input-microphone,
    we need to check for certain controls on alsa mixer level too, to know
@@ -71,9 +74,9 @@ static headset_ports get_headset_ports(const pa_card_info *c)
         pa_card_port_info *p = c->ports[i];
         if (!strcmp(p->name, "analog-output-headphones"))
             h.headphones = p;
-        else if (!strcmp(p->name, "analog-input-microphone-headset"))
+        else if (!strcmp(p->name, "analog-input-headset-mic"))
             h.headsetmic = p;
-        else if (!strcmp(p->name, "analog-input-microphone"))
+        else if (!strcmp(p->name, "analog-input-headphone-mic"))
             h.headphonemic = p;
     }
     return h;

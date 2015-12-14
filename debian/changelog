@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+16.04.20151214-0ubuntu1) xenial; urgency=medium
+
+  [ David Henningsson ]
+  * Update PulseAudio port names to fix LP: #1521664 (LP: #1521664)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Mon, 14 Dec 2015 10:02:41 +0000
+
 unity-settings-daemon (15.04.1+16.04.20151118.1-0ubuntu2) xenial; urgency=high
 
   * Fix build-dependencies to use new libystemd-dev package.name.

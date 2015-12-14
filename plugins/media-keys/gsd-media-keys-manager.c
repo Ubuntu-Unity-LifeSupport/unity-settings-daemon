@@ -2819,15 +2819,15 @@ on_wdypi_action (int action, void *userdata)
                 break;
         case WDYPI_DIALOG_HEADPHONES:
                 pa_backend_set_port(pb, "analog-output-headphones", true);
-                pa_backend_set_port(pb, "analog-input-microphone-internal", false);
+                pa_backend_set_port(pb, "analog-input-internal-mic", false);
                 break;
         case WDYPI_DIALOG_HEADSET:
                 pa_backend_set_port(pb, "analog-output-headphones", true);
-                pa_backend_set_port(pb, "analog-input-microphone-headset", false);
+                pa_backend_set_port(pb, "analog-input-headset-mic", false);
                 break;
         case WDYPI_DIALOG_MICROPHONE:
                 pa_backend_set_port(pb, "analog-output-speaker", true);
-                pa_backend_set_port(pb, "analog-input-microphone", false);
+                pa_backend_set_port(pb, "analog-input-headphone-mic", false);
                 break;
         default:
                 break;
