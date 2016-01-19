@@ -1,3 +1,19 @@
+unity-settings-daemon (15.04.1+16.04.20160119-0ubuntu1) xenial; urgency=medium
+
+  [ William Hua ]
+  * plugins/keyboard/gsd-keyboard-manager.c:
+    - Fix shortcuts for non-latin keyboard layouts in certain programs,
+      but only when the user's layout switching shortcuts are not
+      Shift_L, Shift_R, <Shift>Shift_L, or <Shift>Shift_R (LP: #1226962)
+
+  [ Rui Matos ]
+  * power: Fix a crash when reading invalid backlight values
+
+  [ Sebastien Bacher ]
+  * keyboard: Avoid warning when bell-custom-file changes
+
+ -- Iain Lane <iain@orangesquash.org.uk>  Tue, 19 Jan 2016 17:08:48 +0000
+
 unity-settings-daemon (15.04.1+16.04.20151214-0ubuntu1) xenial; urgency=medium
 
   [ David Henningsson ]
