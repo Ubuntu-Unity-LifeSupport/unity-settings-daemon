@@ -109,11 +109,6 @@
 #define DEFAULT_LANGUAGE "en_US"
 #define DEFAULT_LAYOUT "us"
 
-#define SWITCH_SETTINGS_DIR "org.gnome.desktop.wm.keybindings"
-
-#define SWITCH_INPUT_SOURCE_KEY          "switch-input-source"
-#define SWITCH_INPUT_SOURCE_BACKWARD_KEY "switch-input-source-backward"
-
 #define GSD_KEYBOARD_DBUS_NAME  "org.gnome.SettingsDaemon.Keyboard"
 #define GSD_KEYBOARD_DBUS_PATH  "/org/gnome/SettingsDaemon/Keyboard"
 
@@ -124,7 +119,6 @@ struct GsdKeyboardManagerPrivate
         GSettings *gsettings;
         GSettings *input_sources_settings;
         GSettings *interface_settings;
-        GSettings *switch_settings;
         GnomeXkbInfo *xkb_info;
         GDBusProxy *localed;
         GCancellable *cancellable;
@@ -145,9 +139,6 @@ struct GsdKeyboardManagerPrivate
         GdkDeviceManager *device_manager;
         guint device_added_id;
         guint device_removed_id;
-        guint n_xkb_layouts;
-        gboolean latin_first;
-        gboolean shift_switch;
 
         GDBusConnection *dbus_connection;
         GDBusNodeInfo *dbus_introspection;
@@ -633,8 +624,8 @@ xkb_init (GsdKeyboardManager *manager)
         XkbSelectEventDetails (dpy,
                                XkbUseCoreKbd,
                                XkbStateNotify,
-                               XkbModifierLockMask | XkbGroupLockMask,
-                               XkbModifierLockMask | XkbGroupLockMask);
+                               XkbModifierLockMask,
+                               XkbModifierLockMask);
 }
 
 static unsigned
@@ -701,13 +692,6 @@ xkb_events_filter (GdkXEvent *xev_,
 		}
 	}
 
-	if (manager->priv->latin_first && (xkbev->state.changed & XkbGroupLockMask) && manager->priv->n_xkb_layouts > 0) {
-		Display *display = GDK_DISPLAY_XDISPLAY (gdk_display_get_default ());
-
-		/* Fix the locked group to the last group if it was changed by a grp: option. */
-		XkbLockGroup (display, XkbUseCoreKbd, manager->priv->n_xkb_layouts - 1);
-	}
-
         return GDK_FILTER_CONTINUE;
 }
 
@@ -745,20 +729,16 @@ free_xkb_component_names (XkbComponentNamesRec *p)
 static void
 upload_xkb_description (const gchar          *rules_file_path,
                         XkbRF_VarDefsRec     *var_defs,
-                        XkbComponentNamesRec *comp_names,
-                        gint                  n_xkb_layouts,
-                        gboolean              latin_first)
+                        XkbComponentNamesRec *comp_names)
 {
         Display *display = GDK_DISPLAY_XDISPLAY (gdk_display_get_default ());
         XkbDescRec *xkb_desc;
         gchar *rules_file;
 
-        if (!latin_first) {
-                /* The layout we want is always in the first XKB group index
-                 * so we should enforce it to make sure we never end up with
-                 * the wrong one. */
-                XkbLockGroup (display, XkbUseCoreKbd, 0);
-        }
+        /* The layout we want is always in the first XKB group index
+         * so we should enforce it to make sure we never end up with
+         * the wrong one. */
+        XkbLockGroup (display, XkbUseCoreKbd, 0);
 
         /* Upload it to the X server using the same method as setxkbmap */
         xkb_desc = XkbGetKeyboardByName (display,
@@ -779,21 +759,13 @@ upload_xkb_description (const gchar          *rules_file_path,
         if (!XkbRF_SetNamesProp (display, rules_file, var_defs))
                 g_warning ("Couldn't update the XKB root window property");
 
-        if (latin_first && n_xkb_layouts > 0) {
-                /* The layout we want is always in the last XKB group index
-                 * so we should enforce it to make sure we never end up with
-                 * the wrong one. */
-                XkbLockGroup (display, XkbUseCoreKbd, n_xkb_layouts - 1);
-        }
-
         g_free (rules_file);
 }
 
 static gchar *
 build_xkb_group_string (const gchar *user,
                         const gchar *locale,
-                        const gchar *latin,
-                        gboolean     shift_switch)
+                        const gchar *latin)
 {
         gchar *string;
         gsize length = 0;
@@ -813,25 +785,14 @@ build_xkb_group_string (const gchar *user,
 
         string = malloc (length);
 
-        if (shift_switch) {
-                if (locale && latin)
-                        sprintf (string, "%s,%s,%s", user, locale, latin);
-                else if (locale)
-                        sprintf (string, "%s,%s", user, locale);
-                else if (latin)
-                        sprintf (string, "%s,%s", user, latin);
-                else
-                        sprintf (string, "%s", user);
-        } else {
-                if (locale && latin)
-                        sprintf (string, "%s,%s,%s", latin, locale, user);
-                else if (locale)
-                        sprintf (string, "%s,%s", locale, user);
-                else if (latin)
-                        sprintf (string, "%s,%s", latin, user);
-                else
-                        sprintf (string, "%s", user);
-        }
+        if (locale && latin)
+                sprintf (string, "%s,%s,%s", user, locale, latin);
+        else if (locale)
+                sprintf (string, "%s,%s", user, locale);
+        else if (latin)
+                sprintf (string, "%s,%s", user, latin);
+        else
+                sprintf (string, "%s", user);
 
         return string;
 }
@@ -879,7 +840,7 @@ get_locale_layout (GsdKeyboardManager  *manager,
                                         variant);
 }
 
-static gint
+static void
 replace_layout_and_variant (GsdKeyboardManager *manager,
                             XkbRF_VarDefsRec   *xkb_var_defs,
                             const gchar        *layout,
@@ -895,10 +856,9 @@ replace_layout_and_variant (GsdKeyboardManager *manager,
         const gchar *latin_variant = "";
         const gchar *locale_layout = NULL;
         const gchar *locale_variant = NULL;
-        gint n_xkb_layouts = 0;
 
         if (!layout)
-                return n_xkb_layouts;
+                return;
 
         if (!variant)
                 variant = "";
@@ -928,19 +888,10 @@ replace_layout_and_variant (GsdKeyboardManager *manager,
         }
 
         free (xkb_var_defs->layout);
-        xkb_var_defs->layout = build_xkb_group_string (layout, locale_layout, latin_layout, manager->priv->shift_switch);
+        xkb_var_defs->layout = build_xkb_group_string (layout, locale_layout, latin_layout);
 
         free (xkb_var_defs->variant);
-        xkb_var_defs->variant = build_xkb_group_string (variant, locale_variant, latin_variant, manager->priv->shift_switch);
-
-        n_xkb_layouts = 1;
-
-        if (latin_layout)
-                n_xkb_layouts++;
-        if (locale_layout)
-                n_xkb_layouts++;
-
-        return n_xkb_layouts;
+        xkb_var_defs->variant = build_xkb_group_string (variant, locale_variant, latin_variant);
 }
 
 static gchar *
@@ -1068,14 +1019,13 @@ apply_xkb_settings (GsdKeyboardManager *manager,
         XkbRF_RulesRec *xkb_rules;
         XkbRF_VarDefsRec *xkb_var_defs;
         gchar *rules_file_path;
-        gint n_xkb_layouts;
 
         gsd_xkb_get_var_defs (&rules_file_path, &xkb_var_defs);
 
         free (xkb_var_defs->options);
         xkb_var_defs->options = options;
 
-        n_xkb_layouts = replace_layout_and_variant (manager, xkb_var_defs, layout, variant);
+        replace_layout_and_variant (manager, xkb_var_defs, layout, variant);
 
         gdk_error_trap_push ();
 
@@ -1085,14 +1035,10 @@ apply_xkb_settings (GsdKeyboardManager *manager,
                 xkb_comp_names = g_new0 (XkbComponentNamesRec, 1);
 
                 XkbRF_GetComponents (xkb_rules, xkb_var_defs, xkb_comp_names);
-                upload_xkb_description (rules_file_path, xkb_var_defs, xkb_comp_names,
-                                        n_xkb_layouts, !manager->priv->shift_switch);
-                manager->priv->latin_first = !manager->priv->shift_switch;
+                upload_xkb_description (rules_file_path, xkb_var_defs, xkb_comp_names);
 
                 free_xkb_component_names (xkb_comp_names);
                 XkbRF_Free (xkb_rules, True);
-
-                manager->priv->n_xkb_layouts = n_xkb_layouts;
         } else {
                 g_warning ("Couldn't load XKB rules");
         }
@@ -2450,54 +2396,6 @@ fcitx_vanished (GDBusConnection *connection,
 #endif
 
 static gboolean
-is_shift (const gchar *shortcut)
-{
-        return shortcut && (g_str_equal (shortcut, "Shift_L") || g_str_equal (shortcut, "<Shift>Shift_L")
-                        ||  g_str_equal (shortcut, "Shift_R") || g_str_equal (shortcut, "<Shift>Shift_R"));
-}
-
-static gboolean
-is_shift_switch (GSettings *settings)
-{
-        gboolean shift_switch = FALSE;
-        gchar **shortcuts;
-        gchar **i;
-
-        shortcuts = g_settings_get_strv (settings, SWITCH_INPUT_SOURCE_KEY);
-
-        for (i = shortcuts; !shift_switch && *i; i++)
-                shift_switch = is_shift (*i);
-
-        g_strfreev (shortcuts);
-
-        if (shift_switch)
-                return shift_switch;
-
-        shortcuts = g_settings_get_strv (settings, SWITCH_INPUT_SOURCE_BACKWARD_KEY);
-
-        for (i = shortcuts; !shift_switch && *i; i++)
-                shift_switch = is_shift (*i);
-
-        g_strfreev (shortcuts);
-
-        return shift_switch;
-}
-
-static void
-switch_settings_changed (GSettings *settings,
-                         gchar     *key,
-                         gpointer   user_data)
-{
-        GsdKeyboardManager *manager = user_data;
-        GsdKeyboardManagerPrivate *priv = manager->priv;
-
-        if (is_shift_switch (settings) != priv->shift_switch) {
-                priv->shift_switch = !priv->shift_switch;
-                apply_input_source (manager, priv->active_input_source);
-        }
-}
-
-static gboolean
 start_keyboard_idle_cb (GsdKeyboardManager *manager)
 {
         const gchar *module;
@@ -2524,8 +2422,6 @@ start_keyboard_idle_cb (GsdKeyboardManager *manager)
 
         manager->priv->input_sources_settings = g_settings_new (GNOME_DESKTOP_INPUT_SOURCES_DIR);
         manager->priv->interface_settings = g_settings_new (GNOME_DESKTOP_INTERFACE_DIR);
-        manager->priv->switch_settings = g_settings_new (SWITCH_SETTINGS_DIR);
-        manager->priv->shift_switch = is_shift_switch (manager->priv->switch_settings);
         manager->priv->xkb_info = gnome_xkb_info_new ();
 
 #ifdef HAVE_FCITX
@@ -2580,8 +2476,7 @@ start_keyboard_idle_cb (GsdKeyboardManager *manager)
                           G_CALLBACK (settings_changed), manager);
         g_signal_connect (G_OBJECT (manager->priv->gsettings), "changed",
                           G_CALLBACK (gsettings_changed), manager);
-        g_signal_connect (G_OBJECT (manager->priv->switch_settings), "changed",
-                          G_CALLBACK (switch_settings_changed), manager);
+
         g_signal_connect (G_OBJECT (manager->priv->input_sources_settings), "change-event",
                           G_CALLBACK (apply_input_sources_settings), manager);
 
@@ -2635,7 +2530,6 @@ gsd_keyboard_manager_stop (GsdKeyboardManager *manager)
         g_clear_object (&p->cancellable);
 
         g_clear_object (&p->settings);
-        g_clear_object (&p->switch_settings);
         g_clear_object (&p->input_sources_settings);
         g_clear_object (&p->interface_settings);
         g_clear_object (&p->xkb_info);
@@ -2686,7 +2580,6 @@ gsd_keyboard_manager_init (GsdKeyboardManager *manager)
 {
         manager->priv = GSD_KEYBOARD_MANAGER_GET_PRIVATE (manager);
         manager->priv->active_input_source = -1;
-        manager->priv->n_xkb_layouts = -1;
 }
 
 static void
