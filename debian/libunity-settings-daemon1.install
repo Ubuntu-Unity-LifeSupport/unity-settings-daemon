@@ -1,1 +1,1 @@
-usr/lib/libunity-settings-daemon.so.*
+usr/lib/*/libunity-settings-daemon.so.*

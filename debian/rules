@@ -13,6 +13,13 @@ DEB_CONFIGURE_EXTRA_FLAGS = --enable-systemd --disable-packagekit --enable-ibus 
 build/unity-settings-daemon::
 	gcc -o gnome-settings-daemon/gnome-update-wallpaper-cache debian/gnome-update-wallpaper-cache.c `pkg-config --cflags --libs glib-2.0 gdk-3.0 gdk-x11-3.0 gio-2.0 gnome-desktop-3.0`
 
+# don't configure with --libdir, but move the files manually, because
+# other files in /usr/lib/ should not change
+common-install-impl::
+	mkdir -p debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv debian/tmp/usr/lib/lib*.so* debian/tmp/usr/lib/pkgconfig \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+
 install/unity-settings-daemon::
 	/usr/bin/install -c gnome-settings-daemon/gnome-update-wallpaper-cache 'debian/tmp/usr/lib/unity-settings-daemon'
 	install -m 644 -D debian/unity-settings-daemon.user-session.upstart debian/unity-settings-daemon/usr/share/upstart/sessions/unity-settings-daemon.conf

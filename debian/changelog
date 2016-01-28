@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+16.04.20160121-0ubuntu2) xenial; urgency=medium
+
+  * Multiarchify the library packages.
+
+ -- Matthias Klose <doko@ubuntu.com>  Thu, 28 Jan 2016 18:08:04 +0100
+
 unity-settings-daemon (15.04.1+16.04.20160121-0ubuntu1) xenial; urgency=medium
 
   * Revert part of the previous upload, since it broke keyboard
