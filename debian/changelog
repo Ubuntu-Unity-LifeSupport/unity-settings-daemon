@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+16.04.20160201-0ubuntu1) xenial; urgency=medium
+
+  [ CI Train Bot ]
+  * No-change rebuild.
+
+ -- Łukasz Zemczak <ci-train-bot@canonical.com>  Mon, 01 Feb 2016 12:39:42 +0000
+
 unity-settings-daemon (15.04.1+16.04.20160121-0ubuntu2) xenial; urgency=medium
 
   * Multiarchify the library packages.
