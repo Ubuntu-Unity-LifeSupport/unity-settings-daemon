@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+16.04.20160209-0ubuntu1) xenial; urgency=medium
+
+  * Restore the scaling on the greeter, the menu placement is correct
+    now (LP: #1286878)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 09 Feb 2016 10:03:45 +0000
+
 unity-settings-daemon (15.04.1+16.04.20160201-0ubuntu1) xenial; urgency=medium
 
   [ CI Train Bot ]
