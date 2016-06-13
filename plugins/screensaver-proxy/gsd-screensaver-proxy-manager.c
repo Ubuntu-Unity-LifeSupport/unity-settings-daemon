@@ -28,15 +28,12 @@
 #include <string.h>
 #include <errno.h>
 
-#include <locale.h>
+#include <gio/gio.h>
 
-#include <glib.h>
-#include <glib/gi18n.h>
-#include <gdk/gdk.h>
-
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gnome-settings-profile.h"
 #include "gsd-screensaver-proxy-manager.h"
+#include "gsd-idle-monitor.h"
 
 #define GSD_SCREENSAVER_PROXY_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_SCREENSAVER_PROXY_MANAGER, GsdScreensaverProxyManagerPrivate))
 
@@ -134,7 +131,8 @@ static const gchar introspection_xml2[] =
 
 struct GsdScreensaverProxyManagerPrivate
 {
-        GDBusProxy              *session;
+        GsdSessionManager       *session;
+        GsdScreenSaver          *screensaver;
         GDBusConnection         *connection;
         GCancellable            *bus_cancellable;
         GDBusNodeInfo           *introspection_data;
@@ -169,7 +167,7 @@ name_vanished_cb (GDBusConnection            *connection,
                 if (g_strcmp0 (sender, name) == 0) {
                         guint cookie = GPOINTER_TO_UINT (cookie_ptr);
 
-                        g_dbus_proxy_call_sync (manager->priv->session,
+                        g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->session),
                                                 "Uninhibit",
                                                 g_variant_new ("(u)", cookie),
                                                 G_DBUS_CALL_FLAGS_NONE,
@@ -194,18 +192,19 @@ handle_method_call (GDBusConnection       *connection,
                     gpointer               user_data)
 {
         GsdScreensaverProxyManager *manager = GSD_SCREENSAVER_PROXY_MANAGER (user_data);
+        GError *error = NULL;
+        GVariant *ret = NULL;
 
         /* Check session pointer as a proxy for whether the manager is in the
            start or stop state */
-        if (manager->priv->session == NULL) {
-                return;
+        if (manager->priv->session == NULL || manager->priv->screensaver == NULL) {
+                goto unimplemented;
         }
 
         g_debug ("Calling method '%s.%s' for ScreenSaver Proxy",
                  interface_name, method_name);
 
         if (g_strcmp0 (method_name, "Inhibit") == 0) {
-                GVariant *ret;
                 const char *app_id;
                 const char *reason;
                 guint cookie;
@@ -213,12 +212,12 @@ handle_method_call (GDBusConnection       *connection,
                 g_variant_get (parameters,
                                "(ss)", &app_id, &reason);
 
-                ret = g_dbus_proxy_call_sync (manager->priv->session,
+                ret = g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->session),
                                               "Inhibit",
                                               g_variant_new ("(susu)",
                                                              app_id, 0, reason, GSM_INHIBITOR_FLAG_IDLE),
                                               G_DBUS_CALL_FLAGS_NONE,
-                                              -1, NULL, NULL);
+                                              -1, NULL, &error);
                 g_variant_get (ret, "(u)", &cookie);
                 g_hash_table_insert (manager->priv->cookie_ht,
                                      GUINT_TO_POINTER (cookie),
@@ -237,36 +236,52 @@ handle_method_call (GDBusConnection       *connection,
                                              g_strdup (sender),
                                              GUINT_TO_POINTER (watch_id));
                 }
-                g_dbus_method_invocation_return_value (invocation, ret);
         } else if (g_strcmp0 (method_name, "UnInhibit") == 0) {
                 guint cookie;
 
                 g_variant_get (parameters, "(u)", &cookie);
-                g_dbus_proxy_call_sync (manager->priv->session,
+                g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->session),
                                         "Uninhibit",
                                         parameters,
                                         G_DBUS_CALL_FLAGS_NONE,
                                         -1, NULL, NULL);
                 g_debug ("Removing cookie %u from the list for %s", cookie, sender);
                 g_hash_table_remove (manager->priv->cookie_ht, GUINT_TO_POINTER (cookie));
-                g_dbus_method_invocation_return_value (invocation, NULL);
-        } else if (g_strcmp0 (method_name, "Throttle") == 0) {
-                g_dbus_method_invocation_return_value (invocation, NULL);
-        } else if (g_strcmp0 (method_name, "UnThrottle") == 0) {
-                g_dbus_method_invocation_return_value (invocation, NULL);
-        } else if (g_strcmp0 (method_name, "Lock") == 0) {
-                goto unimplemented;
-        } else if (g_strcmp0 (method_name, "SimulateUserActivity") == 0) {
-                goto unimplemented;
-        } else if (g_strcmp0 (method_name, "GetActive") == 0) {
-                goto unimplemented;
-        } else if (g_strcmp0 (method_name, "GetActiveTime") == 0) {
-                goto unimplemented;
+        } else if (g_strcmp0 (method_name, "Lock") == 0 ||
+                   g_strcmp0 (method_name, "SimulateUserActivity") == 0 ||
+                   g_strcmp0 (method_name, "GetActive") == 0 ||
+                   g_strcmp0 (method_name, "GetActiveTime") == 0 ||
+                   g_strcmp0 (method_name, "SetActive") == 0) {
+
+                ret = g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->screensaver),
+                                              method_name,
+                                              parameters,
+                                              G_DBUS_CALL_FLAGS_NONE,
+                                              -1, NULL, &error);
+
+                if (error == NULL && g_strcmp0 (method_name, "SetActive") == 0) {
+                        g_variant_unref (ret);
+
+                        /* Returning the actual Activate state here is not possible,
+                         * as calling GetActive at this point might return an invalid
+                         * value if the activation process is still ongoing. */
+                        ret = g_variant_ref (parameters);
+                }
         } else if (g_strcmp0 (method_name, "GetSessionIdleTime") == 0) {
-                goto unimplemented;
-        } else if (g_strcmp0 (method_name, "SetActive") == 0) {
+                GsdIdleMonitor *idle_monitor = gsd_idle_monitor_get_core ();
+                gint64 idle_time_ms = gsd_idle_monitor_get_idletime (idle_monitor);
+                ret = g_variant_new ("(u)", idle_time_ms / 1000);
+        } else {
                 goto unimplemented;
         }
+
+        if (error != NULL) {
+                g_dbus_method_invocation_return_gerror (invocation, error);
+                g_error_free (error);
+                return;
+        }
+
+        g_dbus_method_invocation_return_value (invocation, ret);
 
         return;
 
@@ -353,7 +368,9 @@ gsd_screensaver_proxy_manager_start (GsdScreensaverProxyManager *manager,
         g_debug ("Starting screensaver-proxy manager");
         gnome_settings_profile_start (NULL);
         manager->priv->session =
-                gnome_settings_session_get_session_proxy ();
+                gnome_settings_bus_get_session_proxy ();
+        manager->priv->screensaver =
+                gnome_settings_bus_get_screen_saver_proxy ();
         manager->priv->watch_ht = g_hash_table_new_full (g_str_hash,
                                                          g_str_equal,
                                                          (GDestroyNotify) g_free,
@@ -371,6 +388,7 @@ gsd_screensaver_proxy_manager_stop (GsdScreensaverProxyManager *manager)
 {
         g_debug ("Stopping screensaver_proxy manager");
         g_clear_object (&manager->priv->session);
+        g_clear_object (&manager->priv->screensaver);
         g_clear_pointer (&manager->priv->watch_ht, g_hash_table_destroy);
         g_clear_pointer (&manager->priv->cookie_ht, g_hash_table_destroy);
 }
@@ -402,6 +420,8 @@ gsd_screensaver_proxy_manager_finalize (GObject *object)
         manager = GSD_SCREENSAVER_PROXY_MANAGER (object);
 
         g_return_if_fail (manager->priv != NULL);
+
+        gsd_screensaver_proxy_manager_stop (manager);
 
         if (manager->priv->name_id != 0) {
                 g_bus_unown_name (manager->priv->name_id);

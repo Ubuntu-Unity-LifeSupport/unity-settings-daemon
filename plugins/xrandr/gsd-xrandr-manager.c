@@ -49,7 +49,7 @@
 #include "gsd-input-helper.h"
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-xrandr-manager.h"
 #include "gsd-rr-config.h"
 #include "gsd-rr.h"

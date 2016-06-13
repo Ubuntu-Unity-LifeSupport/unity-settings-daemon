@@ -28,13 +28,12 @@
 #include <gio/gio.h>
 
 #include "gnome-settings-plugin.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-smartcard-plugin.h"
 #include "gsd-smartcard-manager.h"
 
 struct GsdSmartcardPluginPrivate {
         GsdSmartcardManager *manager;
-        GDBusConnection     *bus_connection;
 
         guint32              is_active : 1;
 };
@@ -45,10 +44,6 @@ typedef enum
     GSD_SMARTCARD_REMOVE_ACTION_LOCK_SCREEN,
     GSD_SMARTCARD_REMOVE_ACTION_FORCE_LOGOUT,
 } GsdSmartcardRemoveAction;
-
-#define SCREENSAVER_DBUS_NAME      "org.gnome.ScreenSaver"
-#define SCREENSAVER_DBUS_PATH      "/"
-#define SCREENSAVER_DBUS_INTERFACE "org.gnome.ScreenSaver"
 
 #define SM_LOGOUT_MODE_FORCE 2
 
@@ -61,20 +56,13 @@ GNOME_SETTINGS_PLUGIN_REGISTER (GsdSmartcardPlugin, gsd_smartcard_plugin);
 static void
 simulate_user_activity (GsdSmartcardPlugin *plugin)
 {
+        GsdScreenSaver *screensaver_proxy;
         GDBusProxy *screensaver_proxy;
 
         g_debug ("GsdSmartcardPlugin telling screensaver about smart card insertion");
-        screensaver_proxy = g_dbus_proxy_new_sync (plugin->priv->bus_connection,
-                                                   0, NULL,
-                                                   SCREENSAVER_DBUS_NAME,
-                                                   SCREENSAVER_DBUS_PATH,
-                                                   SCREENSAVER_DBUS_INTERFACE,
-                                                   NULL, NULL);
-
-        g_dbus_proxy_call (screensaver_proxy,
-                           "SimulateUserActivity",
-                           NULL, G_DBUS_CALL_FLAGS_NONE,
-                           -1, NULL, NULL, NULL);
+        screensaver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
+        gsd_screen_saver_call_simulate_user_activity_sync (screensaver_proxy,
+                                                           NULL, NULL);
 
         g_object_unref (screensaver_proxy);
 }
@@ -85,17 +73,8 @@ lock_screen (GsdSmartcardPlugin *plugin)
         GDBusProxy *screensaver_proxy;
 
         g_debug ("GsdSmartcardPlugin telling screensaver to lock screen");
-        screensaver_proxy = g_dbus_proxy_new_sync (plugin->priv->bus_connection,
-                                                   0, NULL,
-                                                   SCREENSAVER_DBUS_NAME,
-                                                   SCREENSAVER_DBUS_PATH,
-                                                   SCREENSAVER_DBUS_INTERFACE,
-                                                   NULL, NULL);
-
-        g_dbus_proxy_call (screensaver_proxy,
-                           "Lock",
-                           NULL, G_DBUS_CALL_FLAGS_NONE,
-                           -1, NULL, NULL, NULL);
+        screensaver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
+        gsd_screen_saver_call_lock_sync (screensaver_proxy, NULL, NULL);
 
         g_object_unref (screensaver_proxy);
 }
@@ -108,7 +87,7 @@ force_logout (GsdSmartcardPlugin *plugin)
         GVariant   *res;
 
         g_debug ("GsdSmartcardPlugin telling session manager to force logout");
-        sm_proxy = gnome_settings_session_get_session_proxy ();
+        sm_proxy = gnome_settings_bus_get_session_proxy ();
 
         error = NULL;
         res = g_dbus_proxy_call_sync (sm_proxy,
@@ -269,13 +248,6 @@ impl_activate (GnomeSettingsPlugin *plugin)
         g_debug ("GsdSmartcardPlugin Activating smartcard plugin");
 
         error = NULL;
-        smartcard_plugin->priv->bus_connection = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, &error);
-
-        if (smartcard_plugin->priv->bus_connection == NULL) {
-                g_warning ("GsdSmartcardPlugin Unable to connect to session bus: %s", error->message);
-                return;
-        }
-
         if (!gsd_smartcard_manager_start (smartcard_plugin->priv->manager, &error)) {
                 g_warning ("GsdSmartcardPlugin Unable to start smartcard manager: %s", error->message);
                 g_error_free (error);
@@ -318,7 +290,6 @@ impl_deactivate (GnomeSettingsPlugin *plugin)
 
         g_signal_handlers_disconnect_by_func (smartcard_plugin->priv->manager,
                                               smartcard_inserted_cb, smartcard_plugin);
-        smartcard_plugin->priv->bus_connection = NULL;
         smartcard_plugin->priv->is_active = FALSE;
 }
 

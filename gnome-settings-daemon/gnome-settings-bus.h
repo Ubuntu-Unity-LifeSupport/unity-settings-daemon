@@ -19,16 +19,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#ifndef __GNOME_SETTINGS_SESSION_H
-#define __GNOME_SETTINGS_SESSION_H
+#ifndef __GNOME_SETTINGS_BUS_H
+#define __GNOME_SETTINGS_BUS_H
 
 #include <glib-object.h>
+#include "gsd-session-manager-glue.h"
+#include "gsd-screen-saver-glue.h"
 
 G_BEGIN_DECLS
 
-GDBusProxy              *gnome_settings_session_get_session_proxy  (void);
+GsdSessionManager        *gnome_settings_bus_get_session_proxy       (void);
+GsdScreenSaver           *gnome_settings_bus_get_screen_saver_proxy  (void);
 
 G_END_DECLS
 
-#endif /* __GNOME_SETTINGS_SESSION_H */
-
+#endif /* __GNOME_SETTINGS_BUS_H */

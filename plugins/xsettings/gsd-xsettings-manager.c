@@ -434,6 +434,29 @@ get_dpi_from_gsettings (GnomeXSettingsManager *manager)
         return dpi * factor;
 }
 
+static gboolean
+in_desktop (const gchar *name)
+{
+        const gchar *desktop_name_list;
+        gchar **names;
+        gboolean in_list = FALSE;
+        gint i;
+
+        desktop_name_list = g_getenv ("XDG_CURRENT_DESKTOP");
+        if (!desktop_name_list)
+                return FALSE;
+
+        names = g_strsplit (desktop_name_list, ":", -1);
+        for (i = 0; names[i] && !in_list; i++)
+                if (strcmp (names[i], name) == 0) {
+                        in_list = TRUE;
+                        break;
+                }
+        g_strfreev (names);
+
+        return in_list;
+}
+
 static int
 get_window_scale (GnomeXSettingsManager *manager)
 {
@@ -453,7 +476,7 @@ get_window_scale (GnomeXSettingsManager *manager)
                 window_scale = 1;
 
                 /* Under Unity let the shell handle the scaling */
-                if (g_strcmp0 (g_getenv ("XDG_CURRENT_DESKTOP"), "Unity") == 0)
+                if (in_desktop ("Unity"))
                         goto out;
 
                 display = gdk_display_get_default ();

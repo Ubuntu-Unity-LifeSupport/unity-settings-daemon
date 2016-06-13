@@ -381,35 +381,6 @@ load_plugin_module (GnomeSettingsPluginInfo *info)
                 goto out;
         }
 
-        if (g_strcmp0 (g_getenv ("XDG_CURRENT_DESKTOP"), "Unity") == 0
-            && g_strcmp0 (info->priv->name, "Print-notifications") == 0) {
-
-                g_warning ("Disable print plugin under Unity");
-
-                g_object_unref (G_OBJECT (info->priv->module));
-                info->priv->module = NULL;
-
-                /* Mark plugin as unavailable */
-                info->priv->available = FALSE;
-
-                goto out;
-        }
-
-        if (g_strcmp0 (g_getenv ("XDG_CURRENT_DESKTOP"), "GNOME") == 0
-            && g_strcmp0 (info->priv->name, "Background") == 0) {
-
-                g_warning ("Disable background plugin when under gnome-shell");
-
-                g_object_unref (G_OBJECT (info->priv->module));
-                info->priv->module = NULL;
-
-                /* Mark plugin as unavailable */
-                info->priv->available = FALSE;
-
-                goto out;
-        }
-
-
         info->priv->plugin = GNOME_SETTINGS_PLUGIN (gnome_settings_module_new_object (GNOME_SETTINGS_MODULE (info->priv->module)));
 
         g_type_module_unuse (info->priv->module);

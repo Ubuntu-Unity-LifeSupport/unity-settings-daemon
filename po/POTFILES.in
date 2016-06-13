@@ -33,9 +33,6 @@ plugins/power/gpm-common.c
 plugins/power/gsd-power-manager.c
 plugins/power/com.ubuntu.unity-settings-daemon.plugins.power.policy.in.in
 [type: gettext/ini]plugins/power/power.gnome-settings-plugin.in
-plugins/print-notifications/gsd-printer.c
-plugins/print-notifications/gsd-print-notifications-manager.c
-[type: gettext/ini]plugins/print-notifications/print-notifications.gnome-settings-plugin.in
 [type: gettext/ini]plugins/remote-display/remote-display.gnome-settings-plugin.in
 [type: gettext/ini]plugins/screensaver-proxy/screensaver-proxy.gnome-settings-plugin.in
 plugins/smartcard/gsd-smartcard.c

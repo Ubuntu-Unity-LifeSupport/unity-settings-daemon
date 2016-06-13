@@ -35,7 +35,7 @@
 #include "gsd-updates-refresh.h"
 #include "gsd-updates-common.h"
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 
 #define GSD_UPDATES_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_UPDATES_MANAGER, GsdUpdatesManagerPrivate))
 
@@ -60,7 +60,7 @@ struct GsdUpdatesManagerPrivate
         PkControl               *control;
         PkTask                  *task;
         guint                    inhibit_cookie;
-        GDBusProxy              *proxy_session;
+        GsdSessionManager       *proxy_session;
         guint                    update_viewer_watcher_id;
         GVolumeMonitor          *volume_monitor;
         guint                    failed_get_updates_count;
@@ -975,7 +975,7 @@ session_inhibit (GsdUpdatesManager *manager)
 
         /* TRANSLATORS: the reason why we've inhibited it */
         reason = _("A transaction that cannot be interrupted is running");
-        retval = g_dbus_proxy_call_sync (manager->priv->proxy_session,
+        retval = g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->proxy_session),
                                          "Inhibit",
                                          g_variant_new ("(susu)",
                                                         "gnome-settings-daemon", /* app-id */
@@ -1012,7 +1012,7 @@ session_uninhibit (GsdUpdatesManager *manager)
                 g_warning ("not locked");
                 goto out;
         }
-        retval = g_dbus_proxy_call_sync (manager->priv->proxy_session,
+        retval = g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->proxy_session),
                                          "Uninhibit",
                                          g_variant_new ("(u)",
                                                         manager->priv->inhibit_cookie),
@@ -1328,7 +1328,7 @@ gsd_updates_manager_start (GsdUpdatesManager *manager,
 
         /* use gnome-session for the idle detection */
         manager->priv->proxy_session =
-                gnome_settings_session_get_session_proxy ();
+                gnome_settings_bus_get_session_proxy ();
         if (manager->priv->proxy_session == NULL)
                 goto out;
 

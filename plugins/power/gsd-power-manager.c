@@ -43,7 +43,7 @@
 #include "gpm-common.h"
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-enums.h"
 #include "gsd-power-manager.h"
 #include "gsd-rr.h"
@@ -67,10 +67,6 @@
 #define GSD_POWER_DBUS_INTERFACE                GSD_DBUS_BASE_INTERFACE ".Power"
 #define GSD_POWER_DBUS_INTERFACE_SCREEN         GSD_POWER_DBUS_INTERFACE ".Screen"
 #define GSD_POWER_DBUS_INTERFACE_KEYBOARD       GSD_POWER_DBUS_INTERFACE ".Keyboard"
-
-#define GS_DBUS_NAME                            "org.gnome.ScreenSaver"
-#define GS_DBUS_PATH                            "/org/gnome/ScreenSaver"
-#define GS_DBUS_INTERFACE                       "org.gnome.ScreenSaver"
 
 #define GSD_POWER_MANAGER_NOTIFY_TIMEOUT_SHORT          10 * 1000 /* ms */
 #define GSD_POWER_MANAGER_NOTIFY_TIMEOUT_LONG           30 * 1000 /* ms */
@@ -144,7 +140,7 @@ typedef enum {
 struct GsdPowerManagerPrivate
 {
         /* D-Bus */
-        GDBusProxy              *session;
+        GsdSessionManager       *session;
         guint                    name_id;
         GDBusNodeInfo           *introspection_data;
         GDBusConnection         *connection;
@@ -153,7 +149,7 @@ struct GsdPowerManagerPrivate
 
         /* Settings */
         GSettings               *settings;
-        GSettings               *settings_session;
+        GSettings               *settings_bus;
         GSettings               *settings_screensaver;
         GSettings               *settings_xrandr;
 
@@ -166,9 +162,7 @@ struct GsdPowerManagerPrivate
         guint                    low_time;
 
         /* Screensaver */
-        guint                    screensaver_watch_id;
-        GCancellable            *screensaver_cancellable;
-        GDBusProxy              *screensaver_proxy;
+        GsdScreenSaver          *screensaver_proxy;
         gboolean                 screensaver_active;
 
         /* State */
@@ -192,7 +186,6 @@ struct GsdPowerManagerPrivate
 
         /* Keyboard */
         GDBusProxy              *upower_kdb_proxy;
-        gint                     kbd_brightness_now;
         gint                     kbd_brightness_max;
         gint                     kbd_brightness_old;
         gint                     kbd_brightness_pre_dim;
@@ -1739,7 +1732,7 @@ gnome_session_shutdown_cb (GObject *source_object,
 static void
 gnome_session_shutdown (GsdPowerManager *manager)
 {
-        g_dbus_proxy_call (manager->priv->session,
+        g_dbus_proxy_call (G_DBUS_PROXY (manager->priv->session),
                            "Shutdown",
                            NULL,
                            G_DBUS_CALL_FLAGS_NONE,
@@ -1771,7 +1764,7 @@ static void
 gnome_session_logout (GsdPowerManager *manager,
                       guint            logout_mode)
 {
-        g_dbus_proxy_call (manager->priv->session,
+        g_dbus_proxy_call (G_DBUS_PROXY (manager->priv->session),
                            "Logout",
                            g_variant_new ("(u)", logout_mode),
                            G_DBUS_CALL_FLAGS_NONE,
@@ -1931,13 +1924,40 @@ is_action_inhibited (GsdPowerManager *manager, GsdPowerActionType action_type)
 }
 
 static gboolean
+upower_kbd_get_brightness (GsdPowerManager *manager)
+{
+        GVariant *k_now = NULL;
+        GError *error = NULL;
+        gint now;
+
+        k_now = g_dbus_proxy_call_sync (manager->priv->upower_kdb_proxy,
+                                        "GetBrightness",
+                                        NULL,
+                                        G_DBUS_CALL_FLAGS_NONE,
+                                        -1,
+                                        NULL,
+                                        &error);
+        if (k_now == NULL) {
+                if (error->domain != G_DBUS_ERROR ||
+                    error->code != G_DBUS_ERROR_UNKNOWN_METHOD) {
+                        g_warning ("Failed to get brightness: %s",
+                                   error->message);
+                }
+
+                g_error_free (error);
+                return -1;
+        }
+
+        g_variant_get (k_now, "(i)", &now);
+        g_variant_unref (k_now);
+
+        return now;
+}
+
+static gboolean
 upower_kbd_set_brightness (GsdPowerManager *manager, guint value, GError **error)
 {
         GVariant *retval;
-
-        /* same as before */
-        if (manager->priv->kbd_brightness_now == value)
-                return TRUE;
 
         /* update h/w value */
         retval = g_dbus_proxy_call_sync (manager->priv->upower_kdb_proxy,
@@ -1950,17 +1970,16 @@ upower_kbd_set_brightness (GsdPowerManager *manager, guint value, GError **error
         if (retval == NULL)
                 return FALSE;
 
-        /* save new value */
-        manager->priv->kbd_brightness_now = value;
         g_variant_unref (retval);
         return TRUE;
 }
 
-static gboolean
+static int
 upower_kbd_toggle (GsdPowerManager *manager,
                    GError **error)
 {
         gboolean ret;
+        int value = -1;
 
         if (manager->priv->kbd_brightness_old >= 0) {
                 g_debug ("keyboard toggle off");
@@ -1970,19 +1989,24 @@ upower_kbd_toggle (GsdPowerManager *manager,
                 if (ret) {
                         /* succeeded, set to -1 since now no old value */
                         manager->priv->kbd_brightness_old = -1;
+                        value = 0;
                 }
         } else {
                 g_debug ("keyboard toggle on");
                 /* save the current value to restore later when untoggling */
-                manager->priv->kbd_brightness_old = manager->priv->kbd_brightness_now;
+                manager->priv->kbd_brightness_old = upower_kbd_get_brightness (manager);
                 ret = upower_kbd_set_brightness (manager, 0, error);
                 if (!ret) {
                         /* failed, reset back to -1 */
                         manager->priv->kbd_brightness_old = -1;
+                } else {
+                        value = 0;
                 }
         }
 
-        return ret;
+        if (ret)
+                return value;
+        return -1;
 }
 
 static gboolean
@@ -2057,7 +2081,7 @@ setup_lid_closed_action (GsdPowerManager *manager)
         }
 
         if (policy == GSD_POWER_ACTION_NOTHING) {
-		inhibit_lid_switch (manager);
+                inhibit_lid_switch (manager);
                 manager->priv->inhibit_lid_switch_action = TRUE;
         } else {
                 uninhibit_lid_switch (manager);
@@ -2088,7 +2112,7 @@ lock_screensaver (GsdPowerManager *manager)
         do_lock = g_settings_get_boolean (manager->priv->settings_screensaver,
                                           "lock-enabled");
         if (!do_lock) {
-                g_dbus_proxy_call_sync (manager->priv->screensaver_proxy,
+                g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->screensaver_proxy),
                                         "SetActive",
                                         g_variant_new ("(b)", TRUE),
                                         G_DBUS_CALL_FLAGS_NONE,
@@ -2096,7 +2120,7 @@ lock_screensaver (GsdPowerManager *manager)
                 return;
         }
 
-        g_dbus_proxy_call_sync (manager->priv->screensaver_proxy,
+        g_dbus_proxy_call_sync (G_DBUS_PROXY (manager->priv->screensaver_proxy),
                                 "Lock",
                                 NULL,
                                 G_DBUS_CALL_FLAGS_NONE,
@@ -2275,7 +2299,7 @@ kbd_backlight_dim (GsdPowerManager *manager,
         if (manager->priv->upower_kdb_proxy == NULL)
                 return TRUE;
 
-        now = manager->priv->kbd_brightness_now;
+        now = upower_kbd_get_brightness (manager);
         max = manager->priv->kbd_brightness_max;
         idle = PERCENTAGE_TO_ABS (0, max, idle_percentage);
         if (idle > now) {
@@ -2299,7 +2323,7 @@ is_session_active (GsdPowerManager *manager)
         GVariant *variant;
         gboolean is_session_active = FALSE;
 
-        variant = g_dbus_proxy_get_cached_property (manager->priv->session,
+        variant = g_dbus_proxy_get_cached_property (G_DBUS_PROXY (manager->priv->session),
                                                     "SessionIsActive");
         if (variant) {
                 is_session_active = g_variant_get_boolean (variant);
@@ -2464,7 +2488,7 @@ idle_is_session_inhibited (GsdPowerManager  *manager,
         if (manager->priv->session == NULL)
                 return FALSE;
 
-        variant = g_dbus_proxy_get_cached_property (manager->priv->session,
+        variant = g_dbus_proxy_get_cached_property (G_DBUS_PROXY (manager->priv->session),
                                                     "InhibitedActions");
         if (!variant)
                 return FALSE;
@@ -2598,7 +2622,7 @@ idle_configure (GsdPowerManager *manager)
                 timeout_dim = SCREENSAVER_TIMEOUT_BLANK;
         } else {
                 if (g_settings_get_boolean (manager->priv->settings, "idle-dim")) {
-                        timeout_dim = g_settings_get_uint (manager->priv->settings_session,
+                        timeout_dim = g_settings_get_uint (manager->priv->settings_bus,
                                                            "idle-delay");
                         if (timeout_dim == 0) {
                                 timeout_dim = IDLE_DIM_BLANK_DISABLED_MIN;
@@ -2674,6 +2698,19 @@ up_client_on_battery_cb (UpClient *client,
                          GParamSpec *pspec,
                          GsdPowerManager *manager)
 {
+        if (up_client_get_on_battery (manager->priv->up_client)) {
+                ca_context_play (ca_gtk_context_get (), 0,
+                                 CA_PROP_EVENT_ID, "power-unplug",
+                                 /* TRANSLATORS: this is the sound description */
+                                 CA_PROP_EVENT_DESCRIPTION, _("On battery power"), NULL);
+        } else {
+                ca_context_play (ca_gtk_context_get (), 0,
+                                 CA_PROP_EVENT_ID, "power-plug",
+                                 /* TRANSLATORS: this is the sound description */
+                                 CA_PROP_EVENT_DESCRIPTION, _("On AC power"), NULL);
+
+        }
+
         idle_configure (manager);
 
         if (manager->priv->lid_is_closed)
@@ -2765,88 +2802,10 @@ screensaver_signal_cb (GDBusProxy *proxy,
 }
 
 static void
-get_active_cb (GDBusProxy *proxy,
-               GAsyncResult *result,
-               GsdPowerManager *manager)
-{
-        GVariant *res;
-        GError *error = NULL;
-
-        res = g_dbus_proxy_call_finish (proxy, result, &error);
-        if (!res) {
-                g_warning ("Failed to run GetActive() function on screensaver: %s", error->message);
-                g_error_free (error);
-                return;
-        }
-
-        handle_screensaver_active (manager, res);
-        g_variant_unref (res);
-}
-
-static void
-screensaver_proxy_ready_cb (GObject         *source_object,
-                            GAsyncResult    *res,
-                            GsdPowerManager *manager)
-{
-        GError *error = NULL;
-        GDBusProxy *proxy;
-
-        proxy = g_dbus_proxy_new_finish (res, &error);
-
-        if (proxy == NULL) {
-                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-                        g_warning ("Could not connect to screensaver: %s", error->message);
-                g_error_free (error);
-                return;
-        }
-
-        manager->priv->screensaver_proxy = proxy;
-
-        g_signal_connect (manager->priv->screensaver_proxy, "g-signal",
-                          G_CALLBACK (screensaver_signal_cb), manager);
-        g_dbus_proxy_call (manager->priv->screensaver_proxy,
-                           "GetActive",
-                           NULL,
-                           0,
-                           G_MAXINT,
-                           NULL,
-                           (GAsyncReadyCallback)get_active_cb,
-                           manager);
-
-}
-
-static void
-screensaver_appeared_cb (GDBusConnection *connection,
-                         const char      *name,
-                         const char      *name_owner,
-                         GsdPowerManager *manager)
-{
-        g_dbus_proxy_new (connection,
-                          0,
-                          NULL,
-                          GS_DBUS_NAME,
-                          GS_DBUS_PATH,
-                          GS_DBUS_INTERFACE,
-                          manager->priv->screensaver_cancellable,
-                          (GAsyncReadyCallback) screensaver_proxy_ready_cb,
-                          manager);
-
-}
-
-static void
-screensaver_vanished_cb (GDBusConnection *connection,
-                         const char      *name,
-                         GsdPowerManager *manager)
-{
-        g_clear_object (&manager->priv->screensaver_proxy);
-}
-
-static void
 power_keyboard_proxy_ready_cb (GObject             *source_object,
                                GAsyncResult        *res,
                                gpointer             user_data)
 {
-        GVariant *k_now = NULL;
         GVariant *k_max = NULL;
         GError *error = NULL;
         GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
@@ -2859,23 +2818,6 @@ power_keyboard_proxy_ready_cb (GObject             *source_object,
                 goto out;
         }
 
-        k_now = g_dbus_proxy_call_sync (manager->priv->upower_kdb_proxy,
-                                        "GetBrightness",
-                                        NULL,
-                                        G_DBUS_CALL_FLAGS_NONE,
-                                        -1,
-                                        NULL,
-                                        &error);
-        if (k_now == NULL) {
-                if (error->domain != G_DBUS_ERROR ||
-                    error->code != G_DBUS_ERROR_UNKNOWN_METHOD) {
-                        g_warning ("Failed to get brightness: %s",
-                                   error->message);
-                }
-                g_error_free (error);
-                goto out;
-        }
-
         k_max = g_dbus_proxy_call_sync (manager->priv->upower_kdb_proxy,
                                         "GetMaxBrightness",
                                         NULL,
@@ -2884,17 +2826,20 @@ power_keyboard_proxy_ready_cb (GObject             *source_object,
                                         NULL,
                                         &error);
         if (k_max == NULL) {
-                g_warning ("Failed to get max brightness: %s", error->message);
+                if (error->domain != G_DBUS_ERROR ||
+                    error->code != G_DBUS_ERROR_UNKNOWN_METHOD) {
+                        g_warning ("Failed to get max brightness: %s",
+                                   error->message);
+                }
                 g_error_free (error);
                 goto out;
         }
 
-        g_variant_get (k_now, "(i)", &manager->priv->kbd_brightness_now);
         g_variant_get (k_max, "(i)", &manager->priv->kbd_brightness_max);
 
         /* set brightness to max if not currently set so is something
          * sensible */
-        if (manager->priv->kbd_brightness_now <= 0) {
+        if (upower_kbd_get_brightness (manager) < 0) {
                 gboolean ret;
                 ret = upower_kbd_set_brightness (manager,
                                                  manager->priv->kbd_brightness_max,
@@ -2907,8 +2852,6 @@ power_keyboard_proxy_ready_cb (GObject             *source_object,
                 }
         }
 out:
-        if (k_now != NULL)
-                g_variant_unref (k_now);
         if (k_max != NULL)
                 g_variant_unref (k_max);
 }
@@ -3304,10 +3247,15 @@ gsd_power_manager_start (GsdPowerManager *manager,
         inhibit_suspend (manager);
 
         /* track the active session */
-        manager->priv->session = gnome_settings_session_get_session_proxy ();
+        manager->priv->session = gnome_settings_bus_get_session_proxy ();
         g_signal_connect (manager->priv->session, "g-properties-changed",
                           G_CALLBACK (engine_session_properties_changed_cb),
                           manager);
+
+        manager->priv->screensaver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
+
+        g_signal_connect (manager->priv->screensaver_proxy, "g-signal",
+                          G_CALLBACK (screensaver_signal_cb), manager);
 
         manager->priv->kbd_brightness_old = -1;
         manager->priv->kbd_brightness_pre_dim = -1;
@@ -3316,8 +3264,8 @@ gsd_power_manager_start (GsdPowerManager *manager,
         g_signal_connect (manager->priv->settings, "changed",
                           G_CALLBACK (engine_settings_key_changed_cb), manager);
         manager->priv->settings_screensaver = g_settings_new ("org.gnome.desktop.screensaver");
-        manager->priv->settings_session = g_settings_new ("org.gnome.desktop.session");
-        g_signal_connect (manager->priv->settings_session, "changed",
+        manager->priv->settings_bus = g_settings_new ("org.gnome.desktop.session");
+        g_signal_connect (manager->priv->settings_bus, "changed",
                           G_CALLBACK (engine_settings_key_changed_cb), manager);
         manager->priv->settings_xrandr = g_settings_new (GSD_XRANDR_SETTINGS_SCHEMA);
         manager->priv->up_client = up_client_new ();
@@ -3354,15 +3302,6 @@ gsd_power_manager_start (GsdPowerManager *manager,
                                   NULL,
                                   session_presence_proxy_ready_cb,
                                   manager);
-
-        manager->priv->screensaver_watch_id =
-                g_bus_watch_name (G_BUS_TYPE_SESSION,
-                                  GS_DBUS_NAME,
-                                  G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                  (GBusNameAppearedCallback) screensaver_appeared_cb,
-                                  (GBusNameVanishedCallback) screensaver_vanished_cb,
-                                  manager,
-                                  NULL);
 
         manager->priv->devices_array = g_ptr_array_new_with_free_func (g_object_unref);
 
@@ -3440,16 +3379,6 @@ gsd_power_manager_stop (GsdPowerManager *manager)
                 manager->priv->inhibit_lid_switch_timer_id = 0;
         }
 
-        if (manager->priv->screensaver_cancellable != NULL) {
-                g_cancellable_cancel (manager->priv->screensaver_cancellable);
-                g_clear_object (&manager->priv->screensaver_cancellable);
-        }
-
-        if (manager->priv->screensaver_watch_id != 0) {
-                g_bus_unwatch_name (manager->priv->screensaver_watch_id);
-                manager->priv->screensaver_watch_id = 0;
-        }
-
         if (manager->priv->bus_cancellable != NULL) {
                 g_cancellable_cancel (manager->priv->bus_cancellable);
                 g_object_unref (manager->priv->bus_cancellable);
@@ -3466,7 +3395,7 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         g_clear_object (&manager->priv->session);
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->settings_screensaver);
-        g_clear_object (&manager->priv->settings_session);
+        g_clear_object (&manager->priv->settings_bus);
         g_clear_object (&manager->priv->up_client);
 
         if (manager->priv->inhibit_lid_switch_fd != -1) {
@@ -3489,10 +3418,12 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         }
 
         devices = manager->priv->devices_array;
-        for (i = 0; i < devices->len; i++)
-                g_signal_handlers_disconnect_by_data (g_ptr_array_index (devices, i), manager);
-        g_ptr_array_unref (devices);
-        manager->priv->devices_array = NULL;
+        if (devices != NULL) {
+                for (i = 0; i < devices->len; i++)
+                        g_signal_handlers_disconnect_by_data (g_ptr_array_index (devices, i), manager);
+                g_ptr_array_unref (devices);
+                manager->priv->devices_array = NULL;
+        }
 
         g_clear_object (&manager->priv->device_composite);
         g_clear_object (&manager->priv->previous_icon);
@@ -3519,7 +3450,6 @@ gsd_power_manager_init (GsdPowerManager *manager)
         manager->priv->inhibit_lid_switch_fd = -1;
         manager->priv->inhibit_suspend_fd = -1;
         manager->priv->inhibit_lid_switch_action = FALSE;
-        manager->priv->screensaver_cancellable = g_cancellable_new ();
         manager->priv->bus_cancellable = g_cancellable_new ();
 }
 
@@ -3530,6 +3460,7 @@ handle_method_call_keyboard (GsdPowerManager *manager,
                              GVariant *parameters,
                              GDBusMethodInvocation *invocation)
 {
+        gint now;
         gint step;
         gint value = -1;
         gboolean ret;
@@ -3538,19 +3469,23 @@ handle_method_call_keyboard (GsdPowerManager *manager,
 
         if (g_strcmp0 (method_name, "StepUp") == 0) {
                 g_debug ("keyboard step up");
+                now = upower_kbd_get_brightness (manager);
                 step = BRIGHTNESS_STEP_AMOUNT (manager->priv->kbd_brightness_max);
-                value = MIN (manager->priv->kbd_brightness_now + step,
+                value = MIN (now + step,
                              manager->priv->kbd_brightness_max);
                 ret = upower_kbd_set_brightness (manager, value, &error);
 
         } else if (g_strcmp0 (method_name, "StepDown") == 0) {
                 g_debug ("keyboard step down");
+                now = upower_kbd_get_brightness (manager);
                 step = BRIGHTNESS_STEP_AMOUNT (manager->priv->kbd_brightness_max);
-                value = MAX (manager->priv->kbd_brightness_now - step, 0);
+                value = MAX (now - step, 0);
                 ret = upower_kbd_set_brightness (manager, value, &error);
 
         } else if (g_strcmp0 (method_name, "Toggle") == 0) {
-                ret = upower_kbd_toggle (manager, &error);
+                value = upower_kbd_toggle (manager, &error);
+                ret = (value >= 0);
+
         } else {
                 g_assert_not_reached ();
         }

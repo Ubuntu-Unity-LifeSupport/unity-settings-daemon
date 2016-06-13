@@ -47,11 +47,5 @@ else
 disabled_plugins += wacom
 endif
 
-if BUILD_PRINT_NOTIFICATIONS
-enabled_plugins += print-notifications
-else
-disabled_plugins += print-notifications
-endif
-
 SUBDIRS = common $(enabled_plugins)
 DIST_SUBDIRS = $(SUBDIRS) $(disabled_plugins)

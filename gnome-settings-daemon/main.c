@@ -36,7 +36,7 @@
 #include "gnome-settings-manager.h"
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-idle-monitor-private.h"
 
 #define GNOME_SESSION_DBUS_NAME      "org.gnome.SessionManager"
@@ -351,7 +351,7 @@ name_acquired_handler (GDBusConnection *connection,
 {
         GDBusProxy *proxy;
 
-        proxy = gnome_settings_session_get_session_proxy ();
+        proxy = G_DBUS_PROXY (gnome_settings_bus_get_session_proxy ());
 #ifdef HAVE_IBUS
         set_legacy_ibus_env_vars (proxy);
 #endif

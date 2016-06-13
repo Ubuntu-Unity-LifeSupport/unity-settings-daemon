@@ -48,7 +48,7 @@
 #endif
 
 #include "gnome-settings-plugin.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gnome-settings-profile.h"
 #include "gsd-marshal.h"
 #include "gsd-media-keys-manager.h"
@@ -79,10 +79,6 @@
 #define GNOME_KEYRING_DBUS_NAME "org.gnome.keyring"
 #define GNOME_KEYRING_DBUS_PATH "/org/gnome/keyring/daemon"
 #define GNOME_KEYRING_DBUS_INTERFACE "org.gnome.keyring.Daemon"
-
-#define GS_DBUS_NAME                            "org.gnome.ScreenSaver"
-#define GS_DBUS_PATH                            "/org/gnome/ScreenSaver"
-#define GS_DBUS_INTERFACE                       "org.gnome.ScreenSaver"
 
 #define SHELL_DBUS_NAME "org.gnome.Shell"
 #define SHELL_DBUS_PATH "/org/gnome/Shell"
@@ -202,6 +198,9 @@ struct GsdMediaKeysManagerPrivate
         ShellKeyGrabber *key_grabber;
         GCancellable    *shell_cancellable;
         GCancellable    *grab_cancellable;
+
+        /* ScreenSaver stuff */
+        GsdScreenSaver  *screen_saver_proxy;
 
         /* systemd stuff */
         GDBusProxy      *logind_proxy;
@@ -1160,7 +1159,7 @@ gnome_session_shutdown (GsdMediaKeysManager *manager)
 	GVariant *variant;
         GDBusProxy *proxy;
 
-        proxy = gnome_settings_session_get_session_proxy ();
+        proxy = G_DBUS_PROXY (gnome_settings_bus_get_session_proxy ());
 	variant = g_dbus_proxy_call_sync (proxy,
 					  "Shutdown",
 					  NULL,
@@ -1339,22 +1338,34 @@ do_touchpad_action (GsdMediaKeysManager *manager)
 }
 
 static void
+on_screen_locked (GsdScreenSaver      *screen_saver,
+                  GAsyncResult        *result,
+                  GsdMediaKeysManager *manager)
+{
+        gboolean is_locked;
+        GError *error = NULL;
+
+        is_locked = gsd_screen_saver_call_lock_finish (screen_saver, result, &error);
+
+        if (!is_locked) {
+                g_warning ("Couldn't lock screen: %s", error->message);
+                g_error_free (error);
+                return;
+        }
+}
+
+static void
 do_lock_screensaver (GsdMediaKeysManager *manager)
 {
         GsdMediaKeysManagerPrivate *priv = manager->priv;
 
-        if (priv->connection == NULL) {
-                g_warning ("No existing D-Bus connection trying to handle screensaver lock key");
-                return;
-        }
-        g_dbus_connection_call (manager->priv->connection,
-                                GS_DBUS_NAME,
-                                GS_DBUS_PATH,
-                                GS_DBUS_INTERFACE,
-                                "Lock",
-                                NULL, NULL,
-                                G_DBUS_CALL_FLAGS_NONE, -1,
-                                NULL, NULL, NULL);
+        if (priv->screen_saver_proxy == NULL)
+                priv->screen_saver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
+
+        gsd_screen_saver_call_lock (priv->screen_saver_proxy,
+                                    priv->cancellable,
+                                    (GAsyncReadyCallback) on_screen_locked,
+                                    manager);
 }
 
 static void
@@ -3414,6 +3425,8 @@ gsd_media_keys_manager_finalize (GObject *object)
                 g_source_remove (media_keys_manager->priv->start_idle_id);
         if (media_keys_manager->priv->inhibit_keys_fd != -1)
                 close (media_keys_manager->priv->inhibit_keys_fd);
+
+        g_clear_object (&media_keys_manager->priv->screen_saver_proxy);
 
         G_OBJECT_CLASS (gsd_media_keys_manager_parent_class)->finalize (object);
 }

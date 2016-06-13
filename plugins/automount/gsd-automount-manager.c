@@ -29,7 +29,7 @@
 #include <gio/gio.h>
 
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-automount-manager.h"
 #include "gsd-autorun.h"
 
@@ -356,7 +356,7 @@ is_session_active (GsdAutomountManager *manager)
 static void
 do_initialize_session (GsdAutomountManager *manager)
 {
-        manager->priv->session = gnome_settings_session_get_session_proxy ();
+        manager->priv->session = G_DBUS_PROXY (gnome_settings_bus_get_session_proxy ());
         g_signal_connect (manager->priv->session, "g-properties-changed",
                           G_CALLBACK (session_state_changed),
                           manager);
@@ -364,8 +364,6 @@ do_initialize_session (GsdAutomountManager *manager)
 }
 
 #define SCREENSAVER_NAME "org.gnome.ScreenSaver"
-#define SCREENSAVER_PATH "/org/gnome/ScreenSaver"
-#define SCREENSAVER_INTERFACE "org.gnome.ScreenSaver"
 
 static void
 screensaver_signal_callback (GDBusProxy *proxy,
@@ -413,42 +411,6 @@ screensaver_get_active_ready_cb (GObject *source,
 }
 
 static void
-screensaver_proxy_ready_cb (GObject *source,
-                            GAsyncResult *res,
-                            gpointer user_data)
-{
-        GsdAutomountManager *manager = user_data;
-        GError *error = NULL;
-        GDBusProxy *ss_proxy;
-
-        ss_proxy = g_dbus_proxy_new_finish (res, &error);
-
-        if (error != NULL) {
-                g_warning ("Can't get proxy for the ScreenSaver object: %s",
-                           error->message);
-                g_error_free (error);
-
-                return;
-        }
-
-        g_debug ("ScreenSaver proxy ready");
-
-        manager->priv->ss_proxy = ss_proxy;
-
-        g_signal_connect (ss_proxy, "g-signal",
-                          G_CALLBACK (screensaver_signal_callback), manager);
-
-        g_dbus_proxy_call (ss_proxy,
-                           "GetActive",
-                           NULL,
-                           G_DBUS_CALL_FLAGS_NO_AUTO_START,
-                           -1,
-                           NULL,
-                           screensaver_get_active_ready_cb,
-                           manager);
-}
-
-static void
 screensaver_appeared_callback (GDBusConnection *connection,
                                const gchar *name,
                                const gchar *name_owner,
@@ -458,17 +420,25 @@ screensaver_appeared_callback (GDBusConnection *connection,
 
         g_debug ("ScreenSaver name appeared");
 
-        manager->priv->screensaver_active = FALSE;
+        manager->priv->ss_proxy = G_DBUS_PROXY (gnome_settings_bus_get_screen_saver_proxy ());
 
-        g_dbus_proxy_new (connection,
-                          G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
-                          NULL,
-                          name,
-                          SCREENSAVER_PATH,
-                          SCREENSAVER_INTERFACE,
-                          NULL,
-                          screensaver_proxy_ready_cb,
-                          manager);
+        if (manager->priv->ss_proxy == NULL) {
+                g_warning ("Can't get proxy for the ScreenSaver object");
+                return;
+        }
+
+        g_debug ("ScreenSaver proxy ready");
+        g_signal_connect (manager->priv->ss_proxy, "g-signal",
+                          G_CALLBACK (screensaver_signal_callback), manager);
+
+        g_dbus_proxy_call (manager->priv->ss_proxy,
+                           "GetActive",
+                           NULL,
+                           G_DBUS_CALL_FLAGS_NO_AUTO_START,
+                           -1,
+                           NULL,
+                           screensaver_get_active_ready_cb,
+                           manager);
 }
 
 static void
@@ -694,6 +664,10 @@ gsd_automount_manager_stop (GsdAutomountManager *manager)
         GsdAutomountManagerPrivate *p = manager->priv;
 
         g_debug ("Stopping automounting manager");
+
+        if (p->ss_proxy) {
+                g_signal_handlers_disconnect_by_data (p->ss_proxy, manager);
+        }
 
         g_clear_object (&p->session);
         g_clear_object (&p->volume_monitor);

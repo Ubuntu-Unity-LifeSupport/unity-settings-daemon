@@ -31,7 +31,7 @@
 
 #include "gnome-settings-plugin.h"
 #include "gnome-settings-profile.h"
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gsd-color-manager.h"
 #include "gcm-profile-store.h"
 #include "gcm-dmi.h"
@@ -46,7 +46,7 @@
 
 struct GsdColorManagerPrivate
 {
-        GDBusProxy      *session;
+        GsdSessionManager *session;
         CdClient        *client;
         GSettings       *settings;
         GcmProfileStore *profile_store;
@@ -2142,7 +2142,7 @@ gsd_color_manager_init (GsdColorManager *manager)
         priv = manager->priv = GSD_COLOR_MANAGER_GET_PRIVATE (manager);
 
         /* track the active session */
-        priv->session = gnome_settings_session_get_session_proxy ();
+        priv->session = gnome_settings_bus_get_session_proxy ();
         g_signal_connect (priv->session, "g-properties-changed",
                           G_CALLBACK (gcm_session_active_changed_cb), manager);
 
@@ -2195,6 +2195,8 @@ gsd_color_manager_finalize (GObject *object)
         g_return_if_fail (GSD_IS_COLOR_MANAGER (object));
 
         manager = GSD_COLOR_MANAGER (object);
+
+        g_signal_handlers_disconnect_by_data (manager->priv->session, manager);
 
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->client);

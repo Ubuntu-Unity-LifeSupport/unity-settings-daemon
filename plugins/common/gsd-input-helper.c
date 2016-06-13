@@ -595,7 +595,10 @@ xdevice_get_dimensions (int    deviceid,
         guint *value, w, h;
         int i, n_info;
 
+        /* ignore errors, device might be removed before config is done as in #1503758 */
+        gdk_error_trap_push();
         info = XIQueryDevice (GDK_DISPLAY_XDISPLAY (display), deviceid, &n_info);
+        gdk_error_trap_pop_ignored ();
         *width = *height = w = h = 0;
 
         if (!info)

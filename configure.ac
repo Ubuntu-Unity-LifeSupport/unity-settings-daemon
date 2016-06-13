@@ -377,51 +377,6 @@ AC_SUBST(NSS_DATABASE)
 
 
 # ---------------------------------------------------------------------------
-# CUPS
-# ---------------------------------------------------------------------------
-
-AC_ARG_ENABLE(cups,
-              AS_HELP_STRING([--disable-cups], [disable CUPS support (default: enabled)]),,
-              enable_cups=yes)
-
-if test x"$enable_cups" != x"no" ; then
-   AC_PROG_SED
-
-   AC_PATH_PROG(CUPS_CONFIG, cups-config)
-
-   if test x$CUPS_CONFIG = x; then
-     AC_MSG_ERROR([cups-config not found but CUPS support requested])
-   fi
-
-  CUPS_API_VERSION=`$CUPS_CONFIG --api-version`
-  CUPS_API_MAJOR=`echo $ECHO_N $CUPS_API_VERSION | cut -d . -f 1`
-  CUPS_API_MINOR=`echo $ECHO_N $CUPS_API_VERSION | cut -d . -f 2`
-
-  AC_CHECK_HEADERS([cups/cups.h cups/http.h cups/ipp.h],,
-                   AC_MSG_ERROR([CUPS headers not found but CUPS support requested]))
-
-   if ! test $CUPS_API_MAJOR -gt 1 -o \
-             $CUPS_API_MAJOR -eq 1 -a $CUPS_API_MINOR -ge 4 ; then
-      AC_MSG_ERROR([CUPS 1.4 or newer not found, but CUPS support requested])
-   fi
-
-   # https://bugzilla.gnome.org/show_bug.cgi?id=696571
-   CUPS_CPPFLAGS=""
-   if test $CUPS_API_MAJOR -gt 1 -o \
-           $CUPS_API_MAJOR -eq 1 -a $CUPS_API_MINOR -ge 6 ; then
-      CUPS_CPPFLAGS=-D_PPD_DEPRECATED=""
-   fi
-
-   CUPS_CFLAGS=`$CUPS_CONFIG --cflags | $SED -e 's/-O\w*//g' -e 's/-m\w*//g'`
-   CUPS_LIBS=`$CUPS_CONFIG --libs`
-   AC_SUBST(CUPS_CPPFLAGS)
-   AC_SUBST(CUPS_CFLAGS)
-   AC_SUBST(CUPS_LIBS)
-fi
-
-AM_CONDITIONAL(BUILD_PRINT_NOTIFICATIONS, [test x"$enable_cups" = x"yes"])
-
-# ---------------------------------------------------------------------------
 # Enable Profiling
 # ---------------------------------------------------------------------------
 AC_ARG_ENABLE(profiling,
@@ -539,7 +494,6 @@ plugins/media-keys/Makefile
 plugins/media-keys/gvc/Makefile
 plugins/mouse/Makefile
 plugins/orientation/Makefile
-plugins/print-notifications/Makefile
 plugins/remote-display/Makefile
 plugins/screensaver-proxy/Makefile
 plugins/smartcard/Makefile

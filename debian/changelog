@@ -1,3 +1,31 @@
+unity-settings-daemon (15.04.1+16.10.20160613-0ubuntu1) yakkety; urgency=medium
+
+  [ Marco Trevisan (Treviño) ]
+  * PowerManager: connect to keyboard BrightnessChanged signal to update
+    the cached current value properly (LP: #1510344)
+  * GsdPowerManager: don't cache kbd backlight current value (LP:
+    #1583861)
+  * common: backport g-s-d commits for having single shared dbus proxies
+  * ScreensaverProxy: redirect supported calls to gnome screensaver APIs
+    (LP: #1415265, #1584161)
+
+  [ Robert Ancell ]
+  * Correctly check value of XDG_CURRENT_DESKTOP.
+  * Remove code for disabling plugin under GNOME Shell - they don't use
+    u-s-d.
+  * Drop print notifications - not used under Unity.
+
+  [ Sebastien Bacher ]
+  * power: '0' keyboard backlight is a valid value (LP: #1510344)
+  * Don't hit an xerror when a device is removed while being configured
+    (LP: #1503758)
+  * wacom: don't segfault when a device is removed while being
+    configured. (LP: #1439427)
+  * power: fix crasher when the plugin is unloaded (LP: #1567116)
+  * power: Add sound notification on power plug/unplug
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Mon, 13 Jun 2016 11:31:26 +0000
+
 unity-settings-daemon (15.04.1+16.04.20160209-0ubuntu1) xenial; urgency=medium
 
   * Restore the scaling on the greeter, the menu placement is correct

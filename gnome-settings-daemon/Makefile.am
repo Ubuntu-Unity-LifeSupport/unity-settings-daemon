@@ -1,4 +1,5 @@
 NULL =
+BUILT_SOURCES = $(NULL)
 
 INCLUDES = \
 	-DDATADIR=\""$(datadir)"\"				\
@@ -80,11 +81,38 @@ privlib_LTLIBRARIES =		\
 	libgsd.la		\
 	$(NULL)
 
+session_manager_dbus_built_sources = gsd-session-manager-glue.c gsd-session-manager-glue.h
+BUILT_SOURCES += $(session_manager_dbus_built_sources)
+
+$(session_manager_dbus_built_sources) : Makefile.am org.gnome.SessionManager.xml
+	gdbus-codegen							\
+		--interface-prefix org.gnome.SessionManager.		\
+		--generate-c-code gsd-session-manager-glue		\
+		--c-namespace Gsd					\
+		--annotate "org.gnome.SessionManager"			\
+		           "org.gtk.GDBus.C.Name" SessionManager	\
+		$(srcdir)/org.gnome.SessionManager.xml
+
+screen_saver_dbus_built_sources = gsd-screen-saver-glue.c gsd-screen-saver-glue.h
+
+BUILT_SOURCES += $(screen_saver_dbus_built_sources)
+
+$(screen_saver_dbus_built_sources) : Makefile.am org.gnome.ScreenSaver.xml
+	gdbus-codegen						\
+		--interface-prefix org.gnome.ScreenSaver.	\
+		--generate-c-code gsd-screen-saver-glue		\
+		--c-namespace Gsd				\
+		--annotate "org.gnome.ScreenSaver"		\
+		           "org.gtk.GDBus.C.Name" ScreenSaver	\
+		$(srcdir)/org.gnome.ScreenSaver.xml
+
 libgsd_la_SOURCES =		\
+	$(session_manager_dbus_built_sources) \
+	$(screen_saver_dbus_built_sources) \
 	gnome-settings-profile.c	\
 	gnome-settings-profile.h	\
-	gnome-settings-session.c	\
-	gnome-settings-session.h	\
+	gnome-settings-bus.c	\
+	gnome-settings-bus.h	\
 	$(NULL)
 
 libgsd_la_CPPFLAGS = 		\
@@ -115,7 +143,10 @@ gsd_SCRIPTS = \
 
 EXTRA_DIST = \
 	unity-settings-daemon-localeexec.in \
-	idle-monitor.xml
+	org.gnome.SessionManager.xml        \
+	org.gnome.ScreenSaver.xml           \
+	idle-monitor.xml                    \
+	$(NULL)
 
 unity-settings-daemon-localeexec: unity-settings-daemon-localeexec.in
 	$(AM_V_GEN) sed -e "s|\@libexecdir\@|$(libexecdir)|" -e "s|\@prefix\@|$(prefix)|"  $< > $@.tmp && mv $@.tmp $@

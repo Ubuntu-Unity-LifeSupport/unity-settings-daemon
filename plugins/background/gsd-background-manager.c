@@ -42,7 +42,7 @@
 #include <libgnome-desktop/gnome-bg.h>
 #include <X11/Xatom.h>
 
-#include "gnome-settings-session.h"
+#include "gnome-settings-bus.h"
 #include "gnome-settings-profile.h"
 #include "gsd-background-manager.h"
 
@@ -335,7 +335,7 @@ static void
 draw_background_after_session_loads (GsdBackgroundManager *manager)
 {
         manager->priv->proxy =
-                gnome_settings_session_get_session_proxy ();
+                G_DBUS_PROXY (gnome_settings_bus_get_session_proxy ());
 
         manager->priv->proxy_signal_id = g_signal_connect (manager->priv->proxy,
                                                            "g-signal",
