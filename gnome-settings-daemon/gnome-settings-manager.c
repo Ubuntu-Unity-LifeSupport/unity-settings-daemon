@@ -55,6 +55,11 @@ static const gchar introspection_xml[] =
 "  </interface>"
 "</node>";
 
+typedef struct  {
+        const char *signal;
+        const char *name;
+} SignalCache;
+
 struct GnomeSettingsManagerPrivate
 {
         guint                       owner_id;
@@ -64,6 +69,7 @@ struct GnomeSettingsManagerPrivate
         char                      **whitelist;
         GsdPnpIds                  *pnp_ids;
         GSList                     *plugins;
+        GQueue                     *signal_queue;
 };
 
 static void     gnome_settings_manager_class_init  (GnomeSettingsManagerClass *klass);
@@ -73,6 +79,17 @@ static void     gnome_settings_manager_finalize    (GObject                   *o
 G_DEFINE_TYPE (GnomeSettingsManager, gnome_settings_manager, G_TYPE_OBJECT)
 
 static gpointer manager_object = NULL;
+
+static void signal_cache_free (SignalCache *cache)
+{
+        if (cache == NULL) {
+            return;
+        }
+
+        g_free (cache->signal);
+        g_free (cache->name);
+        g_free (cache);
+}
 
 GQuark
 gnome_settings_manager_error_quark (void)
@@ -137,17 +154,23 @@ emit_signal (GnomeSettingsManager    *manager,
              const char              *name)
 {
         GError *error = NULL;
+        GQueue *signal_queue = manager->priv->signal_queue;
 
-        /* FIXME: maybe we should queue those up until the D-Bus
-         * connection is available... */
-        if (manager->priv->connection == NULL)
+        /* Queue up signal if there's no D-Bus connection */
+        if (manager->priv->connection == NULL) {
+                g_debug ("Connection is null, cannot emit signal, queue instead");
+                SignalCache *cache = g_new0 (SignalCache, 1);
+                cache->signal = g_strdup (signal);
+                cache->name = g_strdup (name);
+                g_queue_push_tail (signal_queue, cache);
                 return;
+        } 
 
         if (g_dbus_connection_emit_signal (manager->priv->connection,
                                            NULL,
                                            GSD_DBUS_PATH,
                                            GSD_DBUS_NAME,
-                                           "PluginActivated",
+                                           signal,
                                            g_variant_new ("(s)", name),
                                            &error) == FALSE) {
                 g_debug ("Error emitting signal: %s", error->message);
@@ -344,6 +367,7 @@ on_bus_gotten (GObject             *source_object,
 {
         GDBusConnection *connection;
         GError *error = NULL;
+        GQueue *signal_queue = manager->priv->signal_queue;
 
         connection = g_bus_get_finish (res, &error);
         if (connection == NULL) {
@@ -351,6 +375,7 @@ on_bus_gotten (GObject             *source_object,
                 g_error_free (error);
                 return;
         }
+
         manager->priv->connection = connection;
 
         g_dbus_connection_register_object (connection,
@@ -360,6 +385,16 @@ on_bus_gotten (GObject             *source_object,
                                            NULL,
                                            NULL,
                                            NULL);
+
+        /* Emit queued up signals after got D-Bus connection */
+        if (!g_queue_is_empty (signal_queue)) {
+                g_debug ("Emit queued up signals");
+                while (!g_queue_is_empty (signal_queue)) {
+                        SignalCache *cache = g_queue_pop_head (signal_queue);
+                        emit_signal (manager, cache->signal, cache->name);
+                        signal_cache_free (cache);
+                }
+        }
 }
 
 static void
@@ -396,6 +431,8 @@ gnome_settings_manager_start (GnomeSettingsManager *manager,
                 goto out;
         }
 
+        manager->priv->signal_queue = g_queue_new ();
+
         g_debug ("loading PNPIDs");
         manager->priv->pnp_ids = gsd_pnp_ids_new ();
 
@@ -425,6 +462,12 @@ gnome_settings_manager_stop (GnomeSettingsManager *manager)
                 manager->priv->owner_id = 0;
         }
 
+        /* This will be called from both stop_manager and dispose, so we need to
+         * prevent the queue being freed twice */
+        if (manager->priv->signal_queue != NULL) {
+            g_queue_free_full (manager->priv->signal_queue, signal_cache_free);
+            manager->priv->signal_queue = NULL;
+        }
         g_clear_pointer (&manager->priv->whitelist, g_strfreev);
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->pnp_ids);

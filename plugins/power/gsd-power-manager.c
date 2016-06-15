@@ -905,8 +905,6 @@ engine_coldplug (GsdPowerManager *manager)
         guint i;
         GPtrArray *array = NULL;
         UpDevice *device;
-        gboolean ret;
-        GError *error = NULL;
 
         engine_recalculate_state (manager);
 
@@ -2408,8 +2406,7 @@ idle_set_mode (GsdPowerManager *manager, GsdPowerIdleMode mode)
                 /* only toggle keyboard if present and not already toggled */
                 if (manager->priv->upower_kdb_proxy &&
                     manager->priv->kbd_brightness_old == -1) {
-                        ret = upower_kbd_toggle (manager, &error);
-                        if (!ret) {
+                        if (upower_kbd_toggle (manager, &error) < 0) {
                                 g_warning ("failed to turn the kbd backlight off: %s",
                                            error->message);
                                 g_error_free (error);
@@ -2451,8 +2448,7 @@ idle_set_mode (GsdPowerManager *manager, GsdPowerIdleMode mode)
                 /* only toggle keyboard if present and already toggled off */
                 if (manager->priv->upower_kdb_proxy &&
                     manager->priv->kbd_brightness_old != -1) {
-                        ret = upower_kbd_toggle (manager, &error);
-                        if (!ret) {
+                        if (upower_kbd_toggle (manager, &error) < 0) {
                                 g_warning ("failed to turn the kbd backlight on: %s",
                                            error->message);
                                 g_clear_error (&error);

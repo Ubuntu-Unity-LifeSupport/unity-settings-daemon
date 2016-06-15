@@ -1,3 +1,15 @@
+unity-settings-daemon (15.04.1+16.10.20160615-0ubuntu1) yakkety; urgency=medium
+
+  [ Kai-Heng Feng ]
+  * SettingsManager: Queue up signals before getting D-Bus connection.
+    (LP: #1571640)
+
+  [ Marco Trevisan (Treviño) ]
+  * GsdPowerManager: use proper return value for upower_kbd_toggle
+    wherever we use it (LP: #1592816)
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Wed, 15 Jun 2016 15:55:39 +0000
+
 unity-settings-daemon (15.04.1+16.10.20160613-0ubuntu1) yakkety; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
