@@ -476,7 +476,7 @@ get_window_scale (GnomeXSettingsManager *manager)
                 window_scale = 1;
 
                 /* Under Unity let the shell handle the scaling */
-                if (in_desktop ("Unity"))
+                if (in_desktop ("Unity") && !in_desktop ("GNOME-Flashback"))
                         goto out;
 
                 display = gdk_display_get_default ();

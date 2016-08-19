@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+16.10.20160819-0ubuntu1) yakkety; urgency=medium
+
+  [ Alberts Muktupāvels ]
+  * Use automatic scaling in GNOME Flashback session.
+
+ -- Dmitry Shachnev <mitya57@ubuntu.com>  Fri, 19 Aug 2016 17:47:36 +0000
+
 unity-settings-daemon (15.04.1+16.10.20160615-0ubuntu1) yakkety; urgency=medium
 
   [ Kai-Heng Feng ]
