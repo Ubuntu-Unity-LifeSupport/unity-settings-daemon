@@ -1,0 +1,7 @@
+[Unit]
+Description=Unity Settings Daemon
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=/usr/lib/unity-settings-daemon/unity-settings-daemon
+Restart=on-failure

@@ -1,0 +1,3 @@
+# FIXME: can be moved to "manual" once unity7 gets a systemd service file
+# manual
+exec true

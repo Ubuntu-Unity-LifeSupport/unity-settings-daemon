@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+16.10.20160819-0ubuntu2) yakkety; urgency=medium
+
+  * Add systemd user unit.
+  * Install u-s-d.service into ubuntu-session.target.wants and keep u-s-d.conf
+    as a stub until unity7 gets a systemd service.
+
+ -- Martin Pitt <martin.pitt@ubuntu.com>  Mon, 22 Aug 2016 15:07:09 +0200
+
 unity-settings-daemon (15.04.1+16.10.20160819-0ubuntu1) yakkety; urgency=medium
 
   [ Alberts Muktupāvels ]
