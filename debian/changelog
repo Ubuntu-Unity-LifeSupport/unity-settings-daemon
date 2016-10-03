@@ -1,3 +1,15 @@
+unity-settings-daemon (15.04.1+16.10.20161003-0ubuntu1) yakkety; urgency=medium
+
+  [ Dmitry Shachnev ]
+  * Upstart: Split XDG_CURRENT_DESKTOP properly and start only on Unity
+    sessions
+
+  [ Iain Lane ]
+  * Check XDG_CURRENT_DESKTOP properly in the keyboard plugin (LP:
+    #1554878)
+
+ -- iain@orangesquash.org.uk <iain@orangesquash.org.uk>  Mon, 03 Oct 2016 10:15:27 +0000
+
 unity-settings-daemon (15.04.1+16.10.20160819-0ubuntu2) yakkety; urgency=medium
 
   * Add systemd user unit.

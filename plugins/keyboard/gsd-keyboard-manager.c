@@ -977,6 +977,29 @@ strip_xkb_option (gchar       **options,
         }
 }
 
+static gboolean
+in_desktop (const gchar *name)
+{
+        const gchar *desktop_name_list;
+        gchar **names;
+        gboolean in_list = FALSE;
+        gint i;
+
+        desktop_name_list = g_getenv ("XDG_CURRENT_DESKTOP");
+        if (!desktop_name_list)
+                return FALSE;
+
+        names = g_strsplit (desktop_name_list, ":", -1);
+        for (i = 0; names[i] && !in_list; i++)
+                if (strcmp (names[i], name) == 0) {
+                        in_list = TRUE;
+                        break;
+                }
+        g_strfreev (names);
+
+        return in_list;
+}
+
 static gchar *
 prepare_xkb_options (GsdKeyboardManager *manager,
                      guint               n_sources,
@@ -1001,7 +1024,7 @@ prepare_xkb_options (GsdKeyboardManager *manager,
          * and doesn't call us so we can't set the group switching XKB
          * option in the first place otherwise the X server's switch
          * will take effect and we get a broken configuration. */
-        if (n_sources < 2 || g_strcmp0 (g_getenv ("XDG_CURRENT_DESKTOP"), "Unity") == 0)
+        if (n_sources < 2 || in_desktop ("Unity"))
                 strip_xkb_option (options, "grp:");
 
         options_str = build_xkb_options_string (options);
