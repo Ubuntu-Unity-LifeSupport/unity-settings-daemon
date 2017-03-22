@@ -39,9 +39,6 @@ plugins/smartcard/gsd-smartcard.c
 plugins/smartcard/gsd-smartcard-manager.c
 [type: gettext/ini]plugins/smartcard/smartcard.gnome-settings-plugin.in
 [type: gettext/ini]plugins/sound/sound.gnome-settings-plugin.in
-plugins/updates/gsd-updates-firmware.c
-plugins/updates/gsd-updates-manager.c
-[type: gettext/ini]plugins/updates/updates.gnome-settings-plugin.in
 plugins/wacom/gsd-wacom-device.c
 plugins/wacom/gsd-wacom-osd-window.c
 plugins/wacom/com.ubuntu.unity-settings-daemon.plugins.wacom.policy.in.in

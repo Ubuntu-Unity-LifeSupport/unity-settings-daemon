@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+17.04.20170322-0ubuntu1) zesty; urgency=medium
+
+  * Drop updates plugin (handled by GNOME Software, dropped by gnome-
+    settings-daemon now, and long-disabled in Ubuntu)
+  * Drop dependency on gnome-common to fix FTBFS (backported from gnome-
+    settings-daemon)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Wed, 22 Mar 2017 20:00:38 +0000
+
 unity-settings-daemon (15.04.1+16.10.20161003-0ubuntu1) yakkety; urgency=medium
 
   [ Dmitry Shachnev ]
