@@ -296,6 +296,25 @@ plugin_enabled_cb (GSettings               *settings,
         }
 }
 
+void
+gnome_settings_plugin_info_set_settings_prefix (GnomeSettingsPluginInfo *info,
+                                                const char              *settings_prefix)
+{
+        int priority;
+
+        info->priv->settings = g_settings_new (settings_prefix);
+        info->priv->enabled = g_settings_get_boolean (info->priv->settings, "active");
+
+        priority = g_settings_get_int (info->priv->settings, "priority");
+        if (priority > 0)
+                info->priv->priority = priority;
+
+        g_signal_connect (G_OBJECT (info->priv->settings),
+                          "changed",
+                          G_CALLBACK (plugin_enabled_cb),
+                          info);
+}
+
 static void
 _deactivate_plugin (GnomeSettingsPluginInfo *info)
 {
@@ -496,4 +515,13 @@ gnome_settings_plugin_info_get_priority (GnomeSettingsPluginInfo *info)
         g_return_val_if_fail (GNOME_IS_SETTINGS_PLUGIN_INFO (info), PLUGIN_PRIORITY_DEFAULT);
 
         return info->priv->priority;
+}
+
+void
+gnome_settings_plugin_info_set_priority (GnomeSettingsPluginInfo *info,
+                                         int                      priority)
+{
+        g_return_if_fail (GNOME_IS_SETTINGS_PLUGIN_INFO (info));
+
+        info->priv->priority = priority;
 }

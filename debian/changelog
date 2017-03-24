@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+17.04.20170322-0ubuntu1.1) zesty; urgency=medium
+
+  * Revert drop updates plugin (LP: #1675612)
+
+ -- Robert Ancell <robert.ancell@canonical.com>  Fri, 24 Mar 2017 16:40:30 +1300
+
 unity-settings-daemon (15.04.1+17.04.20170322-0ubuntu1) zesty; urgency=medium
 
   * Drop updates plugin (handled by GNOME Software, dropped by gnome-
