@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+17.04.20170328-0ubuntu1) zesty; urgency=medium
+
+  [ Chris Coulson ]
+  * Filter out outputs that don't have any corresponding CRTCs or modes.
+    (LP: #1542699)
+
+ -- Łukasz Zemczak <lukasz.zemczak@canonical.com>  Tue, 28 Mar 2017 08:18:02 +0000
+
 unity-settings-daemon (15.04.1+17.04.20170322-0ubuntu1.1) zesty; urgency=medium
 
   * Revert drop updates plugin (LP: #1675612)

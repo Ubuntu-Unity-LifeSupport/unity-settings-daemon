@@ -130,6 +130,9 @@ static GsdRROutput *output_new        (ScreenInfo         *info,
 static gboolean       output_initialize (GsdRROutput      *output,
 					 XRRScreenResources *res,
 					 GError            **error);
+static gboolean       output_initialize_clones (GsdRROutput      *output,
+					 XRRScreenResources *res,
+					 GError            **error);
 
 static GsdRROutput *output_copy       (const GsdRROutput *from);
 static void           output_free       (GsdRROutput      *output);
@@ -363,16 +366,6 @@ fill_screen_info_from_resources (ScreenInfo *info,
     info->crtcs = (GsdRRCrtc **)g_ptr_array_free (a, FALSE);
 
     a = g_ptr_array_new ();
-    for (i = 0; i < resources->noutput; ++i)
-    {
-	GsdRROutput *output = output_new (info, resources->outputs[i]);
-
-	g_ptr_array_add (a, output);
-    }
-    g_ptr_array_add (a, NULL);
-    info->outputs = (GsdRROutput **)g_ptr_array_free (a, FALSE);
-
-    a = g_ptr_array_new ();
     for (i = 0;  i < resources->nmode; ++i)
     {
 	GsdRRMode *mode = mode_new (info, resources->modes[i].id);
@@ -382,7 +375,29 @@ fill_screen_info_from_resources (ScreenInfo *info,
     g_ptr_array_add (a, NULL);
     info->modes = (GsdRRMode **)g_ptr_array_free (a, FALSE);
 
-    /* Initialize */
+    /* We create and partially initialize the outputs in one pass to make it
+     * easier to filter out ones that don't have any valid modes or CRTCs
+     */
+    a = g_ptr_array_new ();
+    for (i = 0; i < resources->noutput; ++i)
+    {
+	GsdRROutput *output = output_new (info, resources->outputs[i]);
+	if (!output_initialize (output, resources, error)) {
+	    output_free(output);
+	    g_ptr_array_foreach (a, (GFunc) output_free, NULL);
+	    g_ptr_array_free (a, FALSE);
+	    return FALSE;
+	}
+	if (!output->possible_crtcs[0] || !output->modes[0]) {
+	    output_free(output);
+	    continue;
+	}
+	g_ptr_array_add (a, output);
+    }
+    g_ptr_array_add (a, NULL);
+    info->outputs = (GsdRROutput **)g_ptr_array_free (a, FALSE);
+
+    /* Initialize everything else */
     for (crtc = info->crtcs; *crtc; ++crtc)
     {
 	if (!crtc_initialize (*crtc, resources, error))
@@ -391,7 +406,7 @@ fill_screen_info_from_resources (ScreenInfo *info,
 
     for (output = info->outputs; *output; ++output)
     {
-	if (!output_initialize (*output, resources, error))
+	if (!output_initialize_clones (*output, resources, error))
 	    return FALSE;
     }
 
@@ -1606,18 +1621,6 @@ output_initialize (GsdRROutput *output, XRRScreenResources *res, GError **error)
     g_ptr_array_add (a, NULL);
     output->possible_crtcs = (GsdRRCrtc **)g_ptr_array_free (a, FALSE);
     
-    /* Clones */
-    a = g_ptr_array_new ();
-    for (i = 0; i < info->nclone; ++i)
-    {
-	GsdRROutput *gsd_rr_output = gsd_rr_output_by_id (output->info, info->clones[i]);
-	
-	if (gsd_rr_output)
-	    g_ptr_array_add (a, gsd_rr_output);
-    }
-    g_ptr_array_add (a, NULL);
-    output->clones = (GsdRROutput **)g_ptr_array_free (a, FALSE);
-    
     /* Modes */
     a = g_ptr_array_new ();
     for (i = 0; i < info->nmode; ++i)
@@ -1638,6 +1641,39 @@ output_initialize (GsdRROutput *output, XRRScreenResources *res, GError **error)
     /* brightness data */
     if (output->connected)
         update_brightness_limits (output);
+
+    XRRFreeOutputInfo (info);
+
+    return TRUE;
+}
+
+static gboolean
+output_initialize_clones (GsdRROutput *output, XRRScreenResources *res, GError **error)
+{
+    XRROutputInfo *info = XRRGetOutputInfo (DISPLAY (output), res, output->id);
+    GPtrArray *a;
+    int i;
+
+    if (!info || !output->info)
+    {
+	/* FIXME: see the comment in crtc_initialize() */
+	/* Translators: here, an "output" is a video output */
+	g_set_error (error, GSD_RR_ERROR, GSD_RR_ERROR_RANDR_ERROR,
+		     _("could not get information about output %d"),
+		     (int) output->id);
+	return FALSE;
+    }
+
+    a = g_ptr_array_new ();
+    for (i = 0; i < info->nclone; ++i)
+    {
+	GsdRROutput *gsd_rr_output = gsd_rr_output_by_id (output->info, info->clones[i]);
+	
+	if (gsd_rr_output)
+	    g_ptr_array_add (a, gsd_rr_output);
+    }
+    g_ptr_array_add (a, NULL);
+    output->clones = (GsdRROutput **)g_ptr_array_free (a, FALSE);
 
     XRRFreeOutputInfo (info);
 
