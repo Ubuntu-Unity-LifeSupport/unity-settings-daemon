@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+17.04.20170418-0ubuntu1) zesty; urgency=medium
+
+  * Fix calculator keyboard key by adapting to gnome-calculator 3.24
+    .desktop rename (LP: #1676431)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 18 Apr 2017 11:58:34 +0000
+
 unity-settings-daemon (15.04.1+17.04.20170328-0ubuntu1) zesty; urgency=medium
 
   [ Chris Coulson ]
