@@ -70,7 +70,8 @@ Breaks: rhythmbox (<< 0.11.5),
         gnome-color-manager (<< 3.0),
         unity (<< 7.3.2),
         unity-greeter (<< 0.2.1-0ubuntu1),
-        indicator-datetime (<< 12.10.3daily13.03.26)
+        indicator-datetime (<< 12.10.3daily13.03.26),
+        ubuntu-session (<< 3.24.1-0ubuntu3~),
 Suggests: x11-xserver-utils,
           gnome-screensaver,
           metacity | x-window-manager

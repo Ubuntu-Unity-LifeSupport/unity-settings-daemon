@@ -1,3 +1,13 @@
+unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu1) artful; urgency=medium
+
+  * Rename ubuntu-session systemd target to unity-session to inline with
+    new session name:
+    - ship unity-settings-daemon service symlink in the new systemd target.
+    - Breaks against older version of ubuntu-session, now that unity-session
+      provides that new systemd target name.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Mon, 19 Jun 2017 11:04:53 +0200
+
 unity-settings-daemon (15.04.1+17.04.20170418-0ubuntu1) zesty; urgency=medium
 
   * Fix calculator keyboard key by adapting to gnome-calculator 3.24
