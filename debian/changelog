@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu2) artful; urgency=medium
+
+  * remove debian/unity-settings-daemon.gsettings-override: the key combination
+    is already upstream's default.
+
+ -- Didier Roche <didrocks@ubuntu.com>  Mon, 07 Aug 2017 15:11:27 +0200
+
 unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu1) artful; urgency=medium
 
   * Rename ubuntu-session systemd target to unity-session to inline with
