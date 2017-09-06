@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu3) artful; urgency=medium
+
+  * debian/control: use 'X-Ubuntu-Use-Langpack: yes' since the indicator
+    is now in universe, this way the translations are still available on
+    launchpad and exported to the langpacks
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Wed, 06 Sep 2017 16:47:19 +0200
+
 unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu2) artful; urgency=medium
 
   * remove debian/unity-settings-daemon.gsettings-override: the key combination
