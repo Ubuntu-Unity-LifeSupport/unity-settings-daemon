@@ -113,8 +113,12 @@ static const gchar introspection_xml[] =
 #define SETTINGS_POWER_DIR "org.gnome.settings-daemon.plugins.power"
 #define SETTINGS_XSETTINGS_DIR "org.gnome.settings-daemon.plugins.xsettings"
 #define SETTINGS_TOUCHPAD_DIR "org.gnome.desktop.peripherals.touchpad"
+#define UNITY_SETTINGS_INTERFACE_DIR "com.canonical.Unity.Interface"
+
 #define TOUCHPAD_ENABLED_KEY "send-events"
 #define HIGH_CONTRAST "HighContrast"
+#define TEXT_SCALING_FACTOR_KEY (in_desktop ("Unity") ? \
+                                 "text-scale-factor" : "text-scaling-factor")
 
 #define VOLUME_STEP 6           /* percents for one volume button press */
 
@@ -312,6 +316,29 @@ static const char *kb_backlight_icons[] = {
         "notification-keyboard-brightness-full",
         NULL
 };
+
+static gboolean
+in_desktop (const gchar *name)
+{
+        const gchar *desktop_name_list;
+        gchar **names;
+        gboolean in_list = FALSE;
+        gint i;
+
+        desktop_name_list = g_getenv ("XDG_CURRENT_DESKTOP");
+        if (!desktop_name_list)
+                return FALSE;
+
+        names = g_strsplit (desktop_name_list, ":", -1);
+        for (i = 0; names[i] && !in_list; i++)
+                if (strcmp (names[i], name) == 0) {
+                        in_list = TRUE;
+                        break;
+                }
+        g_strfreev (names);
+
+        return in_list;
+}
 
 static const char *
 calculate_icon_name (gint value, const char **icon_names)
@@ -2070,7 +2097,8 @@ static void
 do_text_size_action (GsdMediaKeysManager *manager,
 		     MediaKeyType         type)
 {
-	gdouble factor, best, distance;
+	GSettings *settings;
+        gdouble factor, best, distance;
 	guint i;
 
 	/* Same values used in the Seeing tab of the Universal Access panel */
@@ -2081,8 +2109,16 @@ do_text_size_action (GsdMediaKeysManager *manager,
 		1.5
 	};
 
+        const gchar *text_scaling_key = TEXT_SCALING_FACTOR_KEY;
+
+        if (in_desktop ("Unity")) {
+                settings = g_settings_new (UNITY_SETTINGS_INTERFACE_DIR);
+        } else {
+                settings = g_object_ref (manager->priv->interface_settings);
+        }
+
 	/* Figure out the current DPI scaling factor */
-	factor = g_settings_get_double (manager->priv->interface_settings, "text-scaling-factor");
+	factor = g_settings_get_double (settings, text_scaling_key);
 	factor += (type == INCREASE_TEXT_KEY ? 0.25 : -0.25);
 
 	/* Try to find a matching value */
@@ -2098,9 +2134,11 @@ do_text_size_action (GsdMediaKeysManager *manager,
 	}
 
 	if (best == 1.0)
-		g_settings_reset (manager->priv->interface_settings, "text-scaling-factor");
+		g_settings_reset (settings, text_scaling_key);
 	else
-		g_settings_set_double (manager->priv->interface_settings, "text-scaling-factor", best);
+		g_settings_set_double (settings, text_scaling_key, best);
+
+        g_object_unref (settings);
 }
 
 static void

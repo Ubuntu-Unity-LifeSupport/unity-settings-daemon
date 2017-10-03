@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+17.10.20171003-0ubuntu1) artful; urgency=medium
+
+  * XSettings: under unity use com.ubuntu.user-interface.desktop keys
+    for scaling settings
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Tue, 03 Oct 2017 06:05:23 +0000
+
 unity-settings-daemon (15.04.1+17.04.20170619-0ubuntu3) artful; urgency=medium
 
   * debian/control: use 'X-Ubuntu-Use-Langpack: yes' since the indicator

@@ -50,6 +50,7 @@
 
 #define MOUSE_SETTINGS_SCHEMA     "org.gnome.settings-daemon.peripherals.mouse"
 #define INTERFACE_SETTINGS_SCHEMA "org.gnome.desktop.interface"
+#define UNITY_INTERFACE_SETTINGS_SCHEMA "com.ubuntu.user-interface.desktop"
 #define SOUND_SETTINGS_SCHEMA     "org.gnome.desktop.sound"
 #define PRIVACY_SETTINGS_SCHEMA     "org.gnome.desktop.privacy"
 #define WM_SETTINGS_SCHEMA        "org.gnome.desktop.wm.preferences"
@@ -68,6 +69,12 @@
 #define FONT_ANTIALIASING_KEY "antialiasing"
 #define FONT_HINTING_KEY      "hinting"
 #define FONT_RGBA_ORDER_KEY   "rgba-order"
+
+#define SCALING_SETTINGS_SCHEMA_FOR_DESKTOP (in_desktop ("Unity") ? \
+                                             UNITY_INTERFACE_SETTINGS_SCHEMA : \
+                                             INTERFACE_SETTINGS_SCHEMA)
+
+static gboolean in_desktop (const gchar *name);
 
 /* As we cannot rely on the X server giving us good DPI information, and
  * that we don't want multi-monitor screens to have different DPIs (thus
@@ -255,6 +262,7 @@ struct GnomeXSettingsManagerPrivate
         gboolean           have_unity;
 
         guint              notify_idle_id;
+        guint              freeze_settings_migrate_id;
 };
 
 #define GSD_XSETTINGS_ERROR gsd_xsettings_error_quark ()
@@ -426,7 +434,7 @@ get_dpi_from_gsettings (GnomeXSettingsManager *manager)
         double      dpi;
         double      factor;
 
-	interface_settings = g_hash_table_lookup (manager->priv->settings, INTERFACE_SETTINGS_SCHEMA);
+	interface_settings = g_hash_table_lookup (manager->priv->settings, SCALING_SETTINGS_SCHEMA_FOR_DESKTOP);
         factor = g_settings_get_double (interface_settings, TEXT_SCALING_FACTOR_KEY);
 
 	dpi = DPI_FALLBACK;
@@ -469,7 +477,7 @@ get_window_scale (GnomeXSettingsManager *manager)
         int monitor_scale;
         double dpi_x, dpi_y;
 
-        interface_settings = g_hash_table_lookup (manager->priv->settings, INTERFACE_SETTINGS_SCHEMA);
+        interface_settings = g_hash_table_lookup (manager->priv->settings, SCALING_SETTINGS_SCHEMA_FOR_DESKTOP);
         window_scale =
                 g_settings_get_uint (interface_settings, SCALING_FACTOR_KEY);
         if (window_scale == 0) {
@@ -526,7 +534,7 @@ static void
 xft_settings_get (GnomeXSettingsManager *manager,
                   GnomeXftSettings      *settings)
 {
-	GSettings  *interface_settings;
+	GSettings  *interface_settings, *scaling_settings;
         GsdFontAntialiasingMode antialiasing;
         GsdFontHinting hinting;
         GsdFontRgbaOrder order;
@@ -535,6 +543,7 @@ xft_settings_get (GnomeXSettingsManager *manager,
         int cursor_size;
 
 	interface_settings = g_hash_table_lookup (manager->priv->settings, INTERFACE_SETTINGS_SCHEMA);
+        scaling_settings = g_hash_table_lookup (manager->priv->settings, SCALING_SETTINGS_SCHEMA_FOR_DESKTOP);
 
         antialiasing = g_settings_get_enum (manager->priv->plugin_settings, FONT_ANTIALIASING_KEY);
         hinting = g_settings_get_enum (manager->priv->plugin_settings, FONT_HINTING_KEY);
@@ -546,7 +555,7 @@ xft_settings_get (GnomeXSettingsManager *manager,
         dpi = get_dpi_from_gsettings (manager);
         settings->dpi = dpi * 1024; /* Xft wants 1/1024ths of an inch */
         settings->scaled_dpi = dpi * settings->window_scale * 1024;
-        cursor_size = g_settings_get_int (interface_settings, CURSOR_SIZE_KEY);
+        cursor_size = g_settings_get_int (scaling_settings, CURSOR_SIZE_KEY);
         settings->cursor_size = cursor_size * settings->window_scale;
         settings->cursor_theme = g_settings_get_string (interface_settings, CURSOR_THEME_KEY);
         settings->rgba = "rgb";
@@ -943,11 +952,38 @@ xsettings_callback (GSettings             *settings,
 
         if (g_str_equal (key, TEXT_SCALING_FACTOR_KEY) ||
             g_str_equal (key, SCALING_FACTOR_KEY) ||
-            g_str_equal (key, CURSOR_SIZE_KEY) ||
-            g_str_equal (key, CURSOR_THEME_KEY)) {
-        	xft_callback (NULL, key, manager);
-        	return;
-	}
+            g_str_equal (key, CURSOR_SIZE_KEY)) {
+                gchar *schema_id;
+                g_object_get (settings, "schema-id", &schema_id, NULL);
+
+                if (g_str_equal (schema_id, SCALING_SETTINGS_SCHEMA_FOR_DESKTOP)) {
+                        update_xft_settings (manager);
+                        queue_notify (manager);
+                } else if (manager->priv->freeze_settings_migrate_id == 0 &&
+                           in_desktop ("Unity") &&
+                           g_str_equal (schema_id, INTERFACE_SETTINGS_SCHEMA)) {
+                        GSettings *unity_interface_settings;
+                        GVariant *setting_value;
+
+                        setting_value = g_settings_get_value (settings, key);
+                        unity_interface_settings =
+                                g_hash_table_lookup (manager->priv->settings,
+                                                     UNITY_INTERFACE_SETTINGS_SCHEMA);
+
+                        g_settings_set_value (unity_interface_settings, key,
+                                              setting_value);
+                        g_variant_unref (setting_value);
+                }
+
+                g_free (schema_id);
+                return;
+        }
+
+        if (g_str_equal (key, CURSOR_THEME_KEY)) {
+                update_xft_settings (manager);
+                queue_notify (manager);
+                return;
+        }
 
         trans = find_translation_entry (settings, key);
         if (trans == NULL) {
@@ -1051,6 +1087,14 @@ start_unity_monitor (GnomeXSettingsManager *manager)
                                                                NULL);
 }
 
+static gboolean
+on_freeze_settings_migrate_timeout (gpointer data)
+{
+        GnomeXSettingsManager *manager = data;
+        manager->priv->freeze_settings_migrate_id = 0;
+        return FALSE;
+}
+
 gboolean
 gnome_xsettings_manager_start (GnomeXSettingsManager *manager,
                                GError               **error)
@@ -1076,6 +1120,8 @@ gnome_xsettings_manager_start (GnomeXSettingsManager *manager,
                              MOUSE_SETTINGS_SCHEMA, g_settings_new (MOUSE_SETTINGS_SCHEMA));
         g_hash_table_insert (manager->priv->settings,
                              INTERFACE_SETTINGS_SCHEMA, g_settings_new (INTERFACE_SETTINGS_SCHEMA));
+        g_hash_table_insert (manager->priv->settings,
+                             UNITY_INTERFACE_SETTINGS_SCHEMA, g_settings_new (UNITY_INTERFACE_SETTINGS_SCHEMA));
         g_hash_table_insert (manager->priv->settings,
                              SOUND_SETTINGS_SCHEMA, g_settings_new (SOUND_SETTINGS_SCHEMA));
         g_hash_table_insert (manager->priv->settings,
@@ -1135,6 +1181,9 @@ gnome_xsettings_manager_start (GnomeXSettingsManager *manager,
         queue_notify (manager);
         g_variant_unref (overrides);
 
+        /* Ingore migration of gnome settings to unity at startup */
+        manager->priv->freeze_settings_migrate_id =
+                g_timeout_add_seconds (5, on_freeze_settings_migrate_timeout, manager);
 
         gnome_settings_profile_end (NULL);
 
@@ -1168,8 +1217,11 @@ gnome_xsettings_manager_stop (GnomeXSettingsManager *manager)
 
         stop_fontconfig_monitor (manager);
 
-        if (manager->priv->unity_name_watch_id > 0)
-                g_bus_unwatch_name (manager->priv->unity_name_watch_id);
+        if (p->unity_name_watch_id > 0)
+                g_bus_unwatch_name (p->unity_name_watch_id);
+
+        if (p->freeze_settings_migrate_id != 0)
+                g_source_remove (p->freeze_settings_migrate_id);
 
         if (p->settings != NULL) {
                 g_hash_table_destroy (p->settings);
