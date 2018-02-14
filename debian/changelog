@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+18.04.20180214.1-0ubuntu1) bionic; urgency=medium
+
+  [ Khurshid Alam ]
+  * gtk_icon_info_free has been deprecated since gtk-3.8. Replace it
+    with g_object_unref (LP: #1747154)
+
+  [ Robert Ancell ]
+  * Remove obsolete --enable-systemd compile flag
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Wed, 14 Feb 2018 12:41:27 +0000
+
 unity-settings-daemon (15.04.1+17.10.20171003-0ubuntu1) artful; urgency=medium
 
   * XSettings: under unity use com.ubuntu.user-interface.desktop keys
