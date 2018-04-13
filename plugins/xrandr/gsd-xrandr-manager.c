@@ -560,8 +560,8 @@ restore_backup_configuration (GsdXrandrManager *manager, const char *backup_file
 
         /* ENOENT means the original file didn't exist.  That is *not* an error;
          * the backup was not created because there wasn't even an original
-         * monitors.xml (such as on a first-time login).  Note that *here* there
-         * is a "didn't work" monitors.xml, so we must delete that one.
+         * unity-monitors.xml (such as on a first-time login).  Note that *here*
+         * there is a "didn't work" unity-monitors.xml, so we must delete that one.
          */
         if (saved_errno == ENOENT)
                 unlink (intended_filename);

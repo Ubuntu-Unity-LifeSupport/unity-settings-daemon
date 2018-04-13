@@ -43,8 +43,8 @@
 #include "edid.h"
 #include "gsd-rr-private.h"
 
-#define CONFIG_INTENDED_BASENAME "monitors.xml"
-#define CONFIG_BACKUP_BASENAME "monitors.xml.backup"
+#define CONFIG_INTENDED_BASENAME "unity-monitors.xml"
+#define CONFIG_BACKUP_BASENAME "unity-monitors.xml.backup"
 
 /* Look for DPI_FALLBACK in:
  * http://git.gnome.org/browse/gnome-settings-daemon/tree/plugins/xsettings/gsd-xsettings-manager.c

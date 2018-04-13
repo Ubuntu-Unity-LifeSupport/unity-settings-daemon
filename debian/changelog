@@ -1,3 +1,20 @@
+unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu1) bionic; urgency=medium
+
+  [ Marco Trevisan (Treviño) ]
+  * gsd-rr-config: rename monitor config files to unity-monitors.xml*
+    (LP: #1763806)
+  * debian:
+    - build-depends on dh-migrations and run dh_migrations on post-install
+    - add debian/unity-settings-daemon.migrations to install migration files
+  * scripts/01-usd-migration-monitors-xml.sh:
+    - Move monitors.xml to unity-monitors.xml if migration is needed
+      (LP: #1763806)
+
+  [ Robert Ancell ]
+  * Support new AccountsService method of setting background file.
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Fri, 13 Apr 2018 21:33:54 +0000
+
 unity-settings-daemon (15.04.1+18.04.20180216-0ubuntu1) bionic; urgency=medium
 
   * No-change rebuild against latest gnome-desktop3

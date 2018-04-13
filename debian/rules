@@ -29,8 +29,10 @@ binary-install/unity-settings-daemon::
 	find debian -name '*.a' -delete
 	find debian -name '*.la' -delete
 
+binary-post-install/unity-settings-daemon::
+	dh_migrations
+
 common-binary-post-install-arch:: list-missing
 
 clean::
 	rm -f gnome-settings-daemon/gnome-update-wallpaper-cache
-

@@ -399,80 +399,80 @@ draw_background_changed (GSettings            *settings,
 static void
 set_accountsservice_background (const gchar *background)
 {
-  GDBusProxy *proxy = NULL;
-  GDBusProxy *user = NULL;
-  GVariant *variant = NULL;
+  GDBusConnection *bus;
+  GVariant *variant;
   GError *error = NULL;
   gchar *object_path = NULL;
 
-  proxy = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
-                                         G_DBUS_PROXY_FLAGS_NONE,
-                                         NULL,
-                                         "org.freedesktop.Accounts",
-                                         "/org/freedesktop/Accounts",
-                                         "org.freedesktop.Accounts",
-                                         NULL,
-                                         &error);
-
-  if (proxy == NULL) {
-    g_warning ("Failed to contact accounts service: %s", error->message);
+  bus = g_bus_get_sync (G_BUS_TYPE_SYSTEM, NULL, &error);
+  if (bus == NULL) {
+    g_warning ("Failed to get system bus: %s", error->message);
     g_error_free (error);
     return;
   }
 
-  variant = g_dbus_proxy_call_sync (proxy,
-                                    "FindUserByName",
-                                    g_variant_new ("(s)", g_get_user_name ()),
-                                    G_DBUS_CALL_FLAGS_NONE,
-                                    -1,
-                                    NULL,
-                                    &error);
-
+  variant = g_dbus_connection_call_sync (bus,
+                                         "org.freedesktop.Accounts",
+                                         "/org/freedesktop/Accounts",
+                                         "org.freedesktop.Accounts",
+                                         "FindUserByName",
+                                         g_variant_new ("(s)", g_get_user_name ()),
+                                         G_VARIANT_TYPE ("(o)"),
+                                         G_DBUS_CALL_FLAGS_NONE,
+                                         -1,
+                                         NULL,
+                                         &error);
   if (variant == NULL) {
     g_warning ("Could not contact accounts service to look up '%s': %s",
                g_get_user_name (), error->message);
     g_error_free (error);
-    goto bail;
+    g_object_unref (bus);
+    return;
   }
-
   g_variant_get (variant, "(o)", &object_path);
-  user = g_dbus_proxy_new_for_bus_sync (G_BUS_TYPE_SYSTEM,
-                                        G_DBUS_PROXY_FLAGS_NONE,
-                                        NULL,
-                                        "org.freedesktop.Accounts",
-                                        object_path,
-                                        "org.freedesktop.Accounts.User",
-                                        NULL,
-                                        &error);
-  g_free (object_path);
-
-  if (user == NULL) {
-    g_warning ("Could not create proxy for user '%s': %s",
-               g_variant_get_string (variant, NULL), error->message);
-    g_error_free (error);
-    goto bail;
-  }
   g_variant_unref (variant);
 
-  variant = g_dbus_proxy_call_sync (user,
-                                    "SetBackgroundFile",
-                                    g_variant_new ("(s)", background ? background : ""),
-                                    G_DBUS_CALL_FLAGS_NONE,
-                                    -1,
-                                    NULL,
-                                    &error);
-
-  if (variant == NULL) {
-    g_warning ("Failed to set the background '%s': %s", background, error->message);
-    g_error_free (error);
-    goto bail;
-  }
-
-bail:
-  if (proxy != NULL)
-    g_object_unref (proxy);
+  variant = g_dbus_connection_call_sync (bus,
+                                         "org.freedesktop.Accounts",
+                                         object_path,
+                                         "org.freedesktop.DBus.Properties",
+                                         "Set",
+                                         g_variant_new ("(ssv)",
+                                                        "org.freedesktop.DisplayManager.AccountsService",
+                                                        "BackgroundFile",
+                                                        g_variant_new_string (background ? background : "")),
+                                         G_VARIANT_TYPE ("()"),
+                                         G_DBUS_CALL_FLAGS_NONE,
+                                         -1,
+                                         NULL,
+                                         &error);
   if (variant != NULL)
     g_variant_unref (variant);
+  else {
+    g_warning ("Failed to set the background '%s': %s", background, error->message);
+    g_clear_error (&error);
+  }
+
+  /* Also attempt the old method (patch not upstreamed into AccountsService */
+  variant = g_dbus_connection_call_sync (bus,
+                                         "org.freedesktop.Accounts",
+                                         object_path,
+                                         "org.freedesktop.Accounts.User",
+                                         "SetBackgroundFile",
+                                         g_variant_new ("(s)", background ? background : ""),
+                                         G_VARIANT_TYPE ("()"),
+                                         G_DBUS_CALL_FLAGS_NONE,
+                                         -1,
+                                         NULL,
+                                         &error);
+  if (variant != NULL)
+    g_variant_unref (variant);
+  else {
+    g_warning ("Failed to set the background '%s': %s", background, error->message);
+    g_clear_error (&error);
+  }
+
+  g_object_unref (bus);
 }
 
 static void
