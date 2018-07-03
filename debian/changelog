@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu2) cosmic; urgency=medium
+
+  [ Kai-Heng Feng ] 
+  * power: Choose correct backlight device on laptops with hybrid graphics
+    (LP: #1683445)
+    Backported from gnome-settings-daemon commit ed7c2744
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 03 Jul 2018 11:27:01 +0200
+
 unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu1) bionic; urgency=medium
 
   [ Marco Trevisan (Treviño) ]
