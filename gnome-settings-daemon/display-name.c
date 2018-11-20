@@ -88,12 +88,23 @@ make_display_size_string (int width_mm,
   return inches;
 }
 
+static gboolean
+has_aspect_as_size(int width_mm, int height_mm)
+{
+    return (width_mm == 1600 && height_mm == 900) ||
+        (width_mm == 1600 && height_mm == 1000) ||
+        (width_mm == 160 && height_mm == 90) ||
+        (width_mm == 160 && height_mm == 100) ||
+        (width_mm == 16 && height_mm == 9) ||
+        (width_mm == 16 && height_mm == 10);
+}
+
 char *
 make_display_name (const MonitorInfo *info)
 {
     const char *vendor;
     int width_mm, height_mm;
-    char *inches, *ret;
+    char *suffix, *ret;
 
     if (info)
     {
@@ -123,22 +134,27 @@ make_display_name (const MonitorInfo *info)
 	height_mm = -1;
     }
     
-    if (width_mm != -1 && height_mm != -1)
+    // are we dealing with aspect coded in EDID size fields?
+    if (has_aspect_as_size(width_mm, height_mm))
+    {
+    	suffix = g_strdup(info->dsc_product_name);
+    }
+    else if (width_mm != -1 && height_mm != -1)
     {
 	double d = sqrt (width_mm * width_mm + height_mm * height_mm);
 
-	inches = diagonal_to_str (d / 25.4);
+	suffix = diagonal_to_str (d / 25.4);
     }
     else
     {
-	inches = NULL;
+	suffix = NULL;
     }
 
-    if (!inches)
+    if (!suffix)
 	return g_strdup (vendor);
 
-    ret = g_strdup_printf ("%s %s", vendor, inches);
-    g_free (inches);
+    ret = g_strdup_printf ("%s %s", vendor, suffix);
+    g_free (suffix);
 
     return ret;
 }

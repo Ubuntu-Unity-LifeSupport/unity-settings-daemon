@@ -1,3 +1,13 @@
+unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu4) disco; urgency=medium
+
+  [ Dariusz Gadomski ]
+  * gnome-settings-daemon/display-name.c:
+    - some vendors record the screen ratio (e.g 16/9) in the EDID instead
+      of including the screen size, detect those cases and display
+      the product name instead of the screen diagonal. (lp: #1755490)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 20 Nov 2018 16:07:31 +0100
+
 unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu2) cosmic; urgency=medium
 
   [ Kai-Heng Feng ] 
