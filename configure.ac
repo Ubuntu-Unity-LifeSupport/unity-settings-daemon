@@ -58,6 +58,7 @@ IBUS_REQUIRED_VERSION=1.4.99
 GSETTINGS_DESKTOP_SCHEMAS_REQUIRED_VERSION=3.7.2.1
 XRANDR_REQUIRED_VERSION=1.3
 XEXT_REQUIRED_VERSION=1.1
+NM_REQUIRED_VERSION=1.0
 
 EXTRA_COMPILE_WARNINGS(yes)
 
@@ -376,6 +377,24 @@ fi
 
 AC_SUBST(NSS_DATABASE)
 
+dnl ---------------------------------------------------------------------------
+dnl Sharing plugin
+dnl ---------------------------------------------------------------------------
+
+AC_ARG_ENABLE(network-manager,
+        AS_HELP_STRING([--disable-network-manager],
+                       [Disable NetworkManager support]),
+        enable_network_manager=$enableval,
+        enable_network_manager=yes)
+
+if test "x$enable_network_manager" = "xyes" ; then
+        NM_MODULE="libnm >= $NM_REQUIRED_VERSION"
+        AC_DEFINE(HAVE_NETWORK_MANAGER, 1, [Defined if NetworkManager support is enabled])
+else
+        NM_MODULE=
+fi
+
+PKG_CHECK_MODULES(SHARING, gio-2.0 $NM_MODULE)
 
 # ---------------------------------------------------------------------------
 # Enable Profiling
@@ -497,6 +516,7 @@ plugins/mouse/Makefile
 plugins/orientation/Makefile
 plugins/remote-display/Makefile
 plugins/screensaver-proxy/Makefile
+plugins/sharing/Makefile
 plugins/smartcard/Makefile
 plugins/sound/Makefile
 plugins/updates/Makefile
@@ -537,6 +557,7 @@ echo "
 
         Session tracking:         ${SESSION_TRACKING}
         LCMS DICT support:        ${have_new_lcms}
+        NetworkManager support:   ${enable_network_manager}
         IBus support:             ${enable_ibus}
         Fcitx support:            ${enable_fcitx}
         Libnotify support:        ${have_libnotify}

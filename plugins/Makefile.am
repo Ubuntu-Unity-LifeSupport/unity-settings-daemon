@@ -16,6 +16,7 @@ enabled_plugins =	\
 	mouse		\
 	remote-display	\
 	screensaver-proxy \
+	sharing     \
 	sound		\
 	xrandr		\
 	xsettings	\

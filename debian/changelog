@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+19.04.20181122-0ubuntu1) disco; urgency=medium
+
+  [ Khurshid Alam ]
+  * Add sharing plugin (LP: #1741027)
+
+ -- Marco Trevisan (Treviño) <mail@3v1n0.net>  Thu, 22 Nov 2018 00:21:48 +0000
+
 unity-settings-daemon (15.04.1+18.04.20180413-0ubuntu4) disco; urgency=medium
 
   [ Dariusz Gadomski ]
