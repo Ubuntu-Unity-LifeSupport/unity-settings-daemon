@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu1) disco; urgency=medium
+
+  [ Khurshid Alam ]
+  * Transition from gnome-settings-daemon-schemas to gnome-settings-
+    daemon-common. Fixes LP: #1811118 (LP: #1811118)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Sat, 09 Feb 2019 02:33:41 +0000
+
 unity-settings-daemon (15.04.1+19.04.20181122-0ubuntu1) disco; urgency=medium
 
   [ Khurshid Alam ]
