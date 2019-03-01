@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu2) disco; urgency=medium
+
+  [ Khurshid Alam ]
+  * Unity uses legacy key-grabber code. But since artful unity isn't the 
+    default session anymore and DESKTOP_SESSION changed from ubuntu to unity. 
+    Fixes LP: #1755106 LP: #1188569 LP: #1727842
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Fri, 01 Mar 2019 17:53:16 +0100
+
 unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu1) disco; urgency=medium
 
   [ Khurshid Alam ]

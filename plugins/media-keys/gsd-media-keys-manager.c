@@ -223,7 +223,7 @@ struct GsdMediaKeysManagerPrivate
         GDBusConnection *connection;
         GCancellable    *bus_cancellable;
         GDBusProxy      *xrandr_proxy;
-        GCancellable    *cancellable;
+        GCancellable    *cancellable; /* Only used for XRandR operations */
 
         guint            start_idle_id;
 
@@ -699,6 +699,7 @@ retry_grabs (gpointer data)
 {
         GsdMediaKeysManager *manager = data;
 
+        g_debug ("Retrying to grab accelerators");
         grab_media_keys (manager);
         return FALSE;
 }
@@ -718,8 +719,10 @@ grab_accelerators_complete (GObject      *object,
 
         if (error) {
                 retry = (error->code == G_DBUS_ERROR_UNKNOWN_METHOD);
-                if (!retry)
-                        g_warning ("%d: %s", error->code, error->message);
+                if (!retry && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to grab accelerators: %s (%d)", error->message, error->code);
+                else if (retry)
+                        g_debug ("Failed to grab accelerators, will retry: %s (%d)", error->message, error->code);
                 g_error_free (error);
         } else {
                 int i;
@@ -768,9 +771,14 @@ grab_accelerator_complete (GObject      *object,
 {
         GrabData *data = user_data;
         MediaKey *key = data->key;
+        GError *error = NULL;
 
-        shell_key_grabber_call_grab_accelerator_finish (SHELL_KEY_GRABBER (object),
-                                                        &key->accel_id, result, NULL);
+        if (!shell_key_grabber_call_grab_accelerator_finish (SHELL_KEY_GRABBER (object),
+                                                             &key->accel_id, result, &error)) {
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to grab accelerator: %s", error->message);
+                g_error_free (error);
+        }
 
         g_slice_free (GrabData, data);
 }
@@ -838,8 +846,14 @@ ungrab_accelerator_complete (GObject      *object,
                              gpointer      user_data)
 {
 	GsdMediaKeysManager *manager = user_data;
-	shell_key_grabber_call_ungrab_accelerator_finish (SHELL_KEY_GRABBER (object),
-	                                                  NULL, result, NULL);
+
+        GError *error = NULL;
+        if (!shell_key_grabber_call_ungrab_accelerator_finish (SHELL_KEY_GRABBER (object),
+                                                               NULL, result, &error)) {
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to ungrab accelerator: %s", error->message);
+                g_error_free (error);
+        }
 }
 
 static void
@@ -1390,7 +1404,7 @@ do_lock_screensaver (GsdMediaKeysManager *manager)
                 priv->screen_saver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
 
         gsd_screen_saver_call_lock (priv->screen_saver_proxy,
-                                    priv->cancellable,
+                                    priv->bus_cancellable,
                                     (GAsyncReadyCallback) on_screen_locked,
                                     manager);
 }
@@ -2005,7 +2019,8 @@ on_xrandr_action_call_finished (GObject             *source_object,
         manager->priv->cancellable = NULL;
 
         if (error != NULL) {
-                g_warning ("Unable to call '%s': %s", action, error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to complete XRandR action: %s", error->message);
                 g_error_free (error);
         } else {
                 g_variant_unref (variant);
@@ -2275,7 +2290,7 @@ do_switch_input_source_action (GsdMediaKeysManager *manager,
         guint first;
         gint i, n;
 
-        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "ubuntu") != 0)
+        if (g_strcmp0 (g_getenv ("DESKTOP_SESSION"), "unity") != 0)
                 if (!priv->have_legacy_keygrabber)
                         return;
 
@@ -2817,6 +2832,9 @@ on_accelerator_activated (ShellKeyGrabber     *grabber,
 {
         guint i;
 
+        g_debug ("Received accel id %u (device-id: %u, timestamp: %u",
+                                        accel_id, deviceid, timestamp);
+
         for (i = 0; i < manager->priv->keys->len; i++) {
                 MediaKey *key;
 
@@ -2831,6 +2849,8 @@ on_accelerator_activated (ShellKeyGrabber     *grabber,
                         do_action (manager, deviceid, key->key_type, timestamp);
                 return;
         }
+
+        g_warning ("Could not find accelerator for accel id %u", accel_id);
 }
 
 static void
@@ -2962,12 +2982,17 @@ on_key_grabber_ready (GObject      *source,
                       gpointer      data)
 {
         GsdMediaKeysManager *manager = data;
+        GError *error = NULL;
 
         manager->priv->key_grabber =
-		shell_key_grabber_proxy_new_for_bus_finish (result, NULL);
+		shell_key_grabber_proxy_new_for_bus_finish (result, &error);
 
-        if (!manager->priv->key_grabber)
+        if (!manager->priv->key_grabber) {
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to create proxy for key grabber: %s", error->message);
+                g_error_free (error);
                 return;
+        }
 
         g_signal_connect (manager->priv->key_grabber, "accelerator-activated",
                           G_CALLBACK (on_accelerator_activated), manager);
@@ -2979,7 +3004,7 @@ static gboolean
 session_has_key_grabber (void)
 {
         const gchar *session = g_getenv ("DESKTOP_SESSION");
-        return g_strcmp0 (session, "gnome") == 0 || g_strcmp0 (session, "ubuntu") == 0;
+        return g_strcmp0 (session, "gnome") == 0 || g_strcmp0 (session, "unity") == 0;
 }
 
 static void
@@ -3379,7 +3404,8 @@ inhibit_done (GObject      *source,
 
         res = g_dbus_proxy_call_with_unix_fd_list_finish (proxy, &fd_list, result, &error);
         if (res == NULL) {
-                g_warning ("Unable to inhibit keypresses: %s", error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Unable to inhibit keypresses: %s", error->message);
                 g_error_free (error);
         } else {
                 g_variant_get (res, "(h)", &idx);
@@ -3478,7 +3504,8 @@ xrandr_ready_cb (GObject             *source_object,
 
         manager->priv->xrandr_proxy = g_dbus_proxy_new_finish (res, &error);
         if (manager->priv->xrandr_proxy == NULL) {
-                g_warning ("Failed to get proxy for XRandR operations: %s", error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to get proxy for XRandR operations: %s", error->message);
                 g_error_free (error);
         }
 }
@@ -3492,8 +3519,9 @@ power_ready_cb (GObject             *source_object,
 
         manager->priv->power_proxy = g_dbus_proxy_new_finish (res, &error);
         if (manager->priv->power_proxy == NULL) {
-                g_warning ("Failed to get proxy for power: %s",
-                           error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to get proxy for power: %s",
+                                   error->message);
                 g_error_free (error);
         }
 }
@@ -3507,8 +3535,9 @@ power_screen_ready_cb (GObject             *source_object,
 
         manager->priv->power_screen_proxy = g_dbus_proxy_new_finish (res, &error);
         if (manager->priv->power_screen_proxy == NULL) {
-                g_warning ("Failed to get proxy for power (screen): %s",
-                           error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to get proxy for power (screen): %s",
+                                   error->message);
                 g_error_free (error);
         }
 }
@@ -3522,8 +3551,9 @@ power_keyboard_ready_cb (GObject             *source_object,
 
         manager->priv->power_keyboard_proxy = g_dbus_proxy_new_finish (res, &error);
         if (manager->priv->power_keyboard_proxy == NULL) {
-                g_warning ("Failed to get proxy for power (keyboard): %s",
-                           error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Failed to get proxy for power (keyboard): %s",
+                                   error->message);
                 g_error_free (error);
         }
 }
@@ -3536,15 +3566,11 @@ on_bus_gotten (GObject             *source_object,
         GDBusConnection *connection;
         GError *error = NULL;
 
-        if (manager->priv->bus_cancellable == NULL ||
-            g_cancellable_is_cancelled (manager->priv->bus_cancellable)) {
-                g_warning ("Operation has been cancelled, so not retrieving session bus");
-                return;
-        }
 
         connection = g_bus_get_finish (res, &error);
         if (connection == NULL) {
-                g_warning ("Could not get session bus: %s", error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Could not get session bus: %s", error->message);
                 g_error_free (error);
                 return;
         }
