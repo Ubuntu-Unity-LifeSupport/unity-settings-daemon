@@ -34,6 +34,7 @@ plugins/power/gsd-power-manager.c
 plugins/power/com.ubuntu.unity-settings-daemon.plugins.power.policy.in.in
 [type: gettext/ini]plugins/power/power.gnome-settings-plugin.in
 [type: gettext/ini]plugins/remote-display/remote-display.gnome-settings-plugin.in
+[type: gettext/ini]plugins/rfkill/rfkill.gnome-settings-plugin.in
 [type: gettext/ini]plugins/screensaver-proxy/screensaver-proxy.gnome-settings-plugin.in
 plugins/smartcard/gsd-smartcard.c
 plugins/smartcard/gsd-smartcard-manager.c

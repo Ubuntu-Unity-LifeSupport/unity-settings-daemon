@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu3) eoan; urgency=medium
+
+  * Unity-control-center has been ported away from libnm-glib to libnm 1.2.
+
+ -- Khurshid Alam <khurshid.alam@linuxmail.org>  Fri, 17 May 2019 09:28:07 +0200
+
 unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu2) disco; urgency=medium
 
   [ Khurshid Alam ]

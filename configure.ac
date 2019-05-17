@@ -397,6 +397,21 @@ fi
 PKG_CHECK_MODULES(SHARING, gio-2.0 $NM_MODULE)
 
 # ---------------------------------------------------------------------------
+# Rfkill
+# ---------------------------------------------------------------------------
+
+AC_ARG_ENABLE(rfkill,
+              AS_HELP_STRING([--disable-rfkill], [disable rfkill support (default: enabled)]),,
+              enable_rfkill=yes, enabled_rfkill=no)
+
+if test x"$enable_rfkill" != x"no" ; then
+  AC_CHECK_HEADERS([linux/rfkill.h],,
+                   AC_MSG_ERROR([RFKill headers not found but rfkill support requested]))
+fi
+
+AM_CONDITIONAL(BUILD_RFKILL, [test x"$enable_rfkill" = x"yes"])
+
+# ---------------------------------------------------------------------------
 # Enable Profiling
 # ---------------------------------------------------------------------------
 AC_ARG_ENABLE(profiling,
@@ -515,6 +530,7 @@ plugins/media-keys/gvc/Makefile
 plugins/mouse/Makefile
 plugins/orientation/Makefile
 plugins/remote-display/Makefile
+plugins/rfkill/Makefile
 plugins/screensaver-proxy/Makefile
 plugins/sharing/Makefile
 plugins/smartcard/Makefile
@@ -565,6 +581,7 @@ echo "
         Smartcard support:        ${have_smartcard_support}
         Cups support:             ${enable_cups}
         Wacom support:            ${have_wacom}
+        RFKill support:           ${enable_rfkill}
 ${NSS_DATABASE:+\
         System nssdb:             ${NSS_DATABASE}
 }\
