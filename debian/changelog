@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu3.2) eoan; urgency=medium
+
+  * power: Remove 'on AC' check from warning-levels
+    UPower already does this for us, to avoid warning levels being set
+    when the batteries didn't notice the AC yet.
+
+ -- Khurshid Alam <khurshid.alam@linuxmail.org>  Tue, 25 Jun 2019 13:46:17 +0200
+
 unity-settings-daemon (15.04.1+19.04.20190209-0ubuntu3.1) eoan; urgency=medium
 
   * Fix airplane mode switch not appearing
