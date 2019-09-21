@@ -58,6 +58,7 @@ Depends: ${shlibs:Depends},
          accountsservice (>= 0.6.34),
          gsettings-desktop-schemas (>= 3.15.4),
          nautilus-data (>= 2.91.3-1),
+         unity-settings-daemon-schemas (>= ${source:Version}),
          gnome-settings-daemon-common (>= 3.16),
          gsettings-ubuntu-schemas (>= 0.0.7+17.10.20170922),
 Recommends: ibus (>= 1.5.0),
@@ -103,6 +104,15 @@ Depends: ${shlibs:Depends},
 Description: Headers for building applications communicating with unity-settings-daemon
  This package contains header files required to build applications that
  communicate with the Unity settings daemon over D-Bus.
+ 
+Package: unity-settings-daemon-schemas
+Architecture: all
+Depends: ${misc:Depends}
+Replaces: gnome-settings-daemon (<< 3.20.1-2ubuntu1~)
+Breaks: gnome-settings-daemon (<< 3.20.1-2ubuntu1~)
+Description: Shared schemas for gnome-settings-daemon
+ This package contains the gsettings schemas used by
+ unity-settings-daemon.
 
 Package: libunity-settings-daemon1
 Architecture: any

@@ -3,6 +3,14 @@ NULL =
 apidir = $(includedir)/unity-settings-daemon-$(GSD_API_VERSION)/unity-settings-daemon
 api_DATA = gsd-enums.h
 
+gschema_in_files = com.canonical.unity.settings-daemon.plugins.media-keys.gschema.xml.in.in
+gsettings_SCHEMAS = $(gschema_in_files:.xml.in.in=.xml)
+
+gsettingsdir = $(datadir)/glib-2.0/schemas
+
+%.gschema.xml.in: %.gschema.xml.in.in
+	$(AM_V_GEN) sed -e "s|\@GETTEXT_PACKAGE\@|$(GETTEXT_PACKAGE)|g" $< > $@
+
 @INTLTOOL_XML_NOMERGE_RULE@
 
 @GSETTINGS_RULES@
@@ -22,6 +30,7 @@ pkgconfig_DATA = unity-settings-daemon.pc libunity-settings-daemon.pc
 
 EXTRA_DIST = 					\
 	$(convert_DATA)				\
+	$(gschema_in_files)         \
 	$(desktop_in_files)			\
 	$(gsettings_ENUM_FILES)			\
 	unity-settings-daemon.pc.in		\
@@ -36,4 +45,6 @@ DISTCLEANFILES = 			\
 
 MAINTAINERCLEANFILES =			\
 	*~				\
-	Makefile.in
+	Makefile.in     \
+	$(gsettings_SCHEMAS:.xml=.valid)
+

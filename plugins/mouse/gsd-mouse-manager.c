@@ -57,7 +57,7 @@
 
 #define GSD_MOUSE_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_MOUSE_MANAGER, GsdMouseManagerPrivate))
 
-#define GSD_SETTINGS_MOUSE_SCHEMA  "org.gnome.settings-daemon.peripherals.mouse"
+#define GNOME_DESKTOP_INTERFACE_DIR  "org.gnome.desktop.interface"
 #define GSETTINGS_MOUSE_SCHEMA     "org.gnome.desktop.peripherals.mouse"
 #define GSETTINGS_TOUCHPAD_SCHEMA  "org.gnome.desktop.peripherals.touchpad"
 
@@ -82,7 +82,7 @@ struct GsdMouseManagerPrivate
         GSettings *touchpad_settings;
         GSettings *mouse_settings;
         GSettings *mouse_a11y_settings;
-        GSettings *gsd_mouse_settings;
+        GSettings *interface_settings;
         GdkDeviceManager *device_manager;
         guint device_added_id;
         guint device_removed_id;
@@ -851,7 +851,7 @@ set_locate_pointer (GsdMouseManager *manager,
                 manager->priv->locate_pointer_spawned = (error == NULL);
 
                 if (error) {
-                        g_settings_set_boolean (manager->priv->gsd_mouse_settings, KEY_LOCATE_POINTER, FALSE);
+                        g_settings_set_boolean (manager->priv->interface_settings, KEY_LOCATE_POINTER, FALSE);
                         g_error_free (error);
                 }
 
@@ -1223,8 +1223,8 @@ gsd_mouse_manager_idle_cb (GsdMouseManager *manager)
 
         set_devicepresence_handler (manager);
 
-        manager->priv->gsd_mouse_settings = g_settings_new (GSD_SETTINGS_MOUSE_SCHEMA);
-        g_signal_connect (manager->priv->gsd_mouse_settings, "changed",
+        manager->priv->interface_settings = g_settings_new (GNOME_DESKTOP_INTERFACE_DIR);
+        g_signal_connect (manager->priv->interface_settings, "changed",
                            G_CALLBACK (mouse_callback), manager);
 
         manager->priv->mouse_a11y_settings = g_settings_new ("org.gnome.desktop.a11y.mouse");
@@ -1241,7 +1241,7 @@ gsd_mouse_manager_idle_cb (GsdMouseManager *manager)
 
         manager->priv->syndaemon_spawned = FALSE;
 
-        set_locate_pointer (manager, g_settings_get_boolean (manager->priv->gsd_mouse_settings, KEY_LOCATE_POINTER));
+        set_locate_pointer (manager, g_settings_get_boolean (manager->priv->interface_settings, KEY_LOCATE_POINTER));
         set_mousetweaks_daemon (manager,
                                 g_settings_get_boolean (manager->priv->mouse_a11y_settings, KEY_DWELL_CLICK_ENABLED),
                                 g_settings_get_boolean (manager->priv->mouse_a11y_settings, KEY_SECONDARY_CLICK_ENABLED));
@@ -1326,6 +1326,8 @@ gsd_mouse_manager_stop (GsdMouseManager *manager)
         g_clear_object (&p->touchpad_settings);
 
         set_locate_pointer (manager, FALSE);
+
+        g_clear_object (&p->interface_settings);
 }
 
 static void
