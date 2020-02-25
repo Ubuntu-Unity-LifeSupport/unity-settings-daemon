@@ -24,6 +24,7 @@ usd_test_background_CFLAGS = \
 
 usd_test_background_LDADD =				\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(SETTINGS_PLUGIN_LIBS)				\
 	$(BACKGROUND_LIBS)				\
 	$(NULL)
@@ -54,6 +55,8 @@ libbackground_la_LDFLAGS =		\
 	$(NULL)
 
 libbackground_la_LIBADD  =		\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(SETTINGS_PLUGIN_LIBS)		\
 	$(BACKGROUND_LIBS)		\
 	$(NULL)

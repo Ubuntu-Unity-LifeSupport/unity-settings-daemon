@@ -31,6 +31,7 @@ libgsdwacom_la_LDFLAGS =		\
 
 libgsdwacom_la_LIBADD  =						\
 	$(top_builddir)/plugins/common/libcommon.la			\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la			\
 	$(SETTINGS_PLUGIN_LIBS)						\
 	$(WACOM_LIBS)

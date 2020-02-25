@@ -27,6 +27,7 @@ libmouse_la_LDFLAGS = 		\
 libmouse_la_LIBADD  =							\
 	$(MOUSE_LIBS)							\
 	$(top_builddir)/plugins/common/libcommon.la			\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(SETTINGS_PLUGIN_LIBS)
 
 plugin_in_files = mouse.gnome-settings-plugin.in

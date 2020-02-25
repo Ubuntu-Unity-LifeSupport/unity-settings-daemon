@@ -22,7 +22,9 @@ libdummy_la_LDFLAGS = 		\
 	$(GSD_PLUGIN_LDFLAGS)
 
 libdummy_la_LIBADD  = 		\
-	$(SETTINGS_PLUGIN_LIBS)
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(SETTINGS_PLUGIN_LIBS) \
+	$(NULL)
 
 plugin_in_files = 		\
 	dummy.gnome-settings-plugin.in

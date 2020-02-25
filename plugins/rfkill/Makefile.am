@@ -52,6 +52,7 @@ librfkill_la_LDFLAGS = 		\
 	$(GSD_PLUGIN_LDFLAGS)
 
 librfkill_la_LIBADD  =						\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(RFKILL_LIBS)						\
 	$(SETTINGS_PLUGIN_LIBS)
 

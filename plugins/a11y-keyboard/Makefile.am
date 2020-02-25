@@ -51,6 +51,7 @@ liba11y_keyboard_la_LDFLAGS = 		\
 	$(NULL)
 
 liba11y_keyboard_la_LIBADD  = 		\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(SETTINGS_PLUGIN_LIBS)		\
 	$(XF86MISC_LIBS)		\
 	$(LIBNOTIFY_LIBS)		\

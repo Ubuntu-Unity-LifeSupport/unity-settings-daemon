@@ -32,7 +32,14 @@ libunity_settings_daemon_la_SOURCES =		\
 	edid-parse.c \
 	edid.h \
 	gsd-idle-monitor.c \
-	gsd-idle-monitor.h
+	gsd-idle-monitor.h \
+	gsd-bg.c \
+	gsd-bg.h \
+	gsd-bg-crossfade.c \
+	gsd-bg-crossfade.h \
+	gsd-bg-slide-show.c \
+	gsd-bg-slide-show.h
+	
 
 nodist_libunity_settings_daemon_la_SOURCES =		\
 	$(dbus_idle_built_sources)
@@ -41,7 +48,11 @@ libunity_settings_daemon_include_HEADERS =		\
 	gsd-pnp-ids.h \
 	gsd-rr.h \
 	gsd-rr-config.h \
-	gsd-idle-monitor.h
+	gsd-idle-monitor.h \
+	gsd-bg.h \
+	gsd-bg-crossfade.h \
+	gsd-bg-slide-show.h
+	
 
 libunity_settings_daemon_includedir = $(includedir)/unity-settings-daemon-$(GSD_API_VERSION)/libunity-settings-daemon
 
@@ -113,6 +124,8 @@ libgsd_la_SOURCES =		\
 	gnome-settings-profile.h	\
 	gnome-settings-bus.c	\
 	gnome-settings-bus.h	\
+	gnome-settings-plugin.c \
+	gnome-settings-plugin.h \
 	$(NULL)
 
 libgsd_la_CPPFLAGS = 		\

@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+19.10.20190921-0ubuntu2) focal; urgency=medium
+
+  [ Khurshid Alam ]
+  * Copy background drawing code from libgnome-desktop
+    (LP: #1863584)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Tue, 25 Feb 2020 21:18:10 +0100
+
 unity-settings-daemon (15.04.1+19.10.20190921-0ubuntu1) eoan; urgency=medium
 
   [ Khurshid Alam ]

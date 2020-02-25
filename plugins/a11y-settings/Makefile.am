@@ -42,7 +42,9 @@ liba11y_settings_la_LDFLAGS = 		\
 	$(GSD_PLUGIN_LDFLAGS)
 
 liba11y_settings_la_LIBADD  = 		\
-	$(SETTINGS_PLUGIN_LIBS)
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(SETTINGS_PLUGIN_LIBS) \
+	$(NULL)
 
 plugin_in_files = 		\
 	a11y-settings.gnome-settings-plugin.in

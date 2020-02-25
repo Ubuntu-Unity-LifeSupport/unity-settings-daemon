@@ -19,7 +19,11 @@ libscreensaver_proxy_la_CFLAGS =	\
 
 libscreensaver_proxy_la_LDFLAGS = $(GSD_PLUGIN_LDFLAGS)
 
-libscreensaver_proxy_la_LIBADD  = $(SETTINGS_PLUGIN_LIBS)
+libscreensaver_proxy_la_LIBADD  = \
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
+	$(SETTINGS_PLUGIN_LIBS)	\
+	$(NULL)
 
 libexec_PROGRAMS = usd-test-screensaver-proxy
 

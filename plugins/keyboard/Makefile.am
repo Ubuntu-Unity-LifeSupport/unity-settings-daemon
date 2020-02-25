@@ -51,6 +51,8 @@ libkeyboard_la_LDFLAGS = 	\
 	$(NULL)
 
 libkeyboard_la_LIBADD  =				\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(top_builddir)/plugins/common/libcommon.la	\
 	$(SETTINGS_PLUGIN_LIBS)				\
 	$(XF86MISC_LIBS)				\

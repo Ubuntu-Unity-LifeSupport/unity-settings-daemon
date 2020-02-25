@@ -25,6 +25,7 @@ libcursor_la_LDFLAGS =		\
 
 libcursor_la_LIBADD  =					\
 	$(top_builddir)/plugins/common/libcommon.la	\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(CURSOR_LIBS)					\
 	$(SETTINGS_PLUGIN_LIBS)

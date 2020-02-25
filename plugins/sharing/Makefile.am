@@ -23,7 +23,11 @@ libsharing_la_CFLAGS =			\
 
 libsharing_la_LDFLAGS = $(GSD_PLUGIN_LDFLAGS)
 
-libsharing_la_LIBADD  = $(SETTINGS_PLUGIN_LIBS) $(SHARING_LIBS)
+libsharing_la_LIBADD  = \
+	$(top_builddir)/gnome-settings-daemon/libgsd.la \
+	$(SETTINGS_PLUGIN_LIBS) \
+	$(SHARING_LIBS) \
+	$(NULL)
 
 noinst_PROGRAMS = gsd-test-sharing
 gsd_test_sharing_SOURCES =				\

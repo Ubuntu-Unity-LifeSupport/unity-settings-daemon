@@ -38,10 +38,9 @@
 #include <gdk/gdk.h>
 #include <gdk/gdkx.h>
 
-#define GNOME_DESKTOP_USE_UNSTABLE_API
-#include <libgnome-desktop/gnome-bg.h>
 #include <X11/Xatom.h>
 
+#include "gsd-bg.h"
 #include "gnome-settings-bus.h"
 #include "gnome-settings-profile.h"
 #include "gsd-background-manager.h"
@@ -51,9 +50,9 @@
 struct GsdBackgroundManagerPrivate
 {
         GSettings   *settings;
-        GnomeBG     *bg;
+        GsdBG     *bg;
 
-        GnomeBGCrossfade *fade;
+        GsdBGCrossfade *fade;
 
         GDBusProxy  *proxy;
         guint        proxy_signal_id;
@@ -209,7 +208,7 @@ draw_background (GsdBackgroundManager *manager,
 
                 root_window = gdk_screen_get_root_window (screen);
 
-                surface = gnome_bg_create_surface (manager->priv->bg,
+                surface = gsd_bg_create_surface (manager->priv->bg,
                                                    root_window,
                                                    gdk_screen_get_width (screen),
                                                    gdk_screen_get_height (screen),
@@ -221,12 +220,12 @@ draw_background (GsdBackgroundManager *manager,
                                 g_object_unref (manager->priv->fade);
                         }
 
-                        manager->priv->fade = gnome_bg_set_surface_as_root_with_crossfade (screen, surface);
+                        manager->priv->fade = gsd_bg_set_surface_as_root_with_crossfade (screen, surface);
                         g_signal_connect_swapped (manager->priv->fade, "finished",
                                                   G_CALLBACK (on_crossfade_finished),
                                                   manager);
                 } else {
-                        gnome_bg_set_surface_as_root (screen, surface);
+                        gsd_bg_set_surface_as_root (screen, surface);
                 }
 
                 cairo_surface_destroy (surface);
@@ -236,7 +235,7 @@ draw_background (GsdBackgroundManager *manager,
 }
 
 static void
-on_bg_transitioned (GnomeBG              *bg,
+on_bg_transitioned (GsdBG              *bg,
                     GsdBackgroundManager *manager)
 {
         draw_background (manager, FALSE);
@@ -248,7 +247,7 @@ settings_change_event_cb (GSettings            *settings,
                           gint                  n_keys,
                           GsdBackgroundManager *manager)
 {
-        gnome_bg_load_from_preferences (manager->priv->bg,
+        gsd_bg_load_from_preferences (manager->priv->bg,
                                         manager->priv->settings);
         return FALSE;
 }
@@ -270,7 +269,7 @@ watch_bg_preferences (GsdBackgroundManager *manager)
 }
 
 static void
-on_bg_changed (GnomeBG              *bg,
+on_bg_changed (GsdBG              *bg,
                GsdBackgroundManager *manager)
 {
         draw_background (manager, TRUE);
@@ -281,7 +280,7 @@ setup_bg (GsdBackgroundManager *manager)
 {
         g_return_if_fail (manager->priv->bg == NULL);
 
-        manager->priv->bg = gnome_bg_new ();
+        manager->priv->bg = gsd_bg_new ();
 
         g_signal_connect (manager->priv->bg,
                           "changed",
@@ -295,7 +294,7 @@ setup_bg (GsdBackgroundManager *manager)
 
         connect_screen_signals (manager);
         watch_bg_preferences (manager);
-        gnome_bg_load_from_preferences (manager->priv->bg,
+        gsd_bg_load_from_preferences (manager->priv->bg,
                                         manager->priv->settings);
 }
 

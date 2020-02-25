@@ -45,6 +45,7 @@ libsound_la_LDFLAGS = \
 	$(GSD_PLUGIN_LDFLAGS)
 
 libsound_la_LIBADD = \
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
 	$(SETTINGS_PLUGIN_LIBS)	\
 	$(SOUND_LIBS)
 

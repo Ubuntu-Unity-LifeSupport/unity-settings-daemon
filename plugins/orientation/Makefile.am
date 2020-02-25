@@ -48,6 +48,7 @@ liborientation_la_LDFLAGS = 		\
 
 liborientation_la_LIBADD  =						\
 	$(top_builddir)/plugins/common/libcommon.la			\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la \
 	$(ORIENTATION_LIBS)						\
 	$(SETTINGS_PLUGIN_LIBS)
 

@@ -34,6 +34,7 @@ libcolor_la_LDFLAGS = 			\
 
 libcolor_la_LIBADD  = 			\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(COLOR_LIBS)			\
 	$(LCMS_LIBS)			\
 	$(SETTINGS_PLUGIN_LIBS)		\

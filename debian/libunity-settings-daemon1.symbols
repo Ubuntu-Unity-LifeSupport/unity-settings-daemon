@@ -105,3 +105,43 @@ libunity-settings-daemon.so.1 libunity-settings-daemon1 #MINVER#
  gsd_rr_screen_set_dpms_mode@Base 14.04.0
  gsd_rr_screen_set_primary_output@Base 14.04.0
  gsd_rr_screen_set_size@Base 14.04.0
+ gsd_bg_get_type@Base 14.04.0
+ gsd_bg_new@Base 14.04.0
+ gsd_bg_load_from_preferences@Base 14.04.0
+ gsd_bg_save_to_preferences@Base 14.04.0
+ gsd_bg_set_filename@Base 14.04.0
+ gsd_bg_set_placement@Base 14.04.0
+ gsd_bg_set_rgba@Base 14.04.0
+ gsd_bg_set_draw_background@Base 14.04.0
+ gsd_bg_get_placement@Base 14.04.0
+ gsd_bg_get_draw_background@Base 14.04.0
+ gsd_bg_get_rgba@Base 14.04.0
+ gsd_bg_get_filename@Base 14.04.0
+ gsd_bg_draw@Base 14.04.0
+ gsd_bg_create_surface@Base 14.04.0
+ gsd_bg_get_image_size@Base 14.04.0
+ gsd_bg_create_thumbnail@Base 14.04.0
+ gsd_bg_is_dark@Base 14.04.0
+ gsd_bg_has_multiple_sizes@Base 14.04.0
+ gsd_bg_changes_with_time@Base 14.04.0
+ gsd_bg_create_frame_thumbnail@Base 14.04.0
+ gsd_bg_set_surface_as_root@Base 14.04.0
+ gsd_bg_set_surface_as_root_with_crossfade@Base 14.04.0
+ gsd_bg_get_surface_from_root@Base 14.04.0
+ gsd_bg_crossfade_get_type@Base 14.04.0
+ gsd_bg_crossfade_new@Base 14.04.0
+ gsd_bg_crossfade_set_start_surface@Base 14.04.0
+ gsd_bg_crossfade_set_end_surface@Base 14.04.0
+ gsd_bg_crossfade_start@Base 14.04.0
+ gsd_bg_crossfade_is_started@Base 14.04.0
+ gsd_bg_crossfade_stop@Base 14.04.0
+ gsd_bg_slide_show_get_type@Base 14.04.0
+ gsd_bg_slide_show_new@Base 14.04.0
+ gsd_bg_slide_show_load@Base 14.04.0
+ gsd_bg_slide_show_load_async@Base 14.04.0
+ gsd_bg_slide_show_get_slide@Base 14.04.0
+ gsd_bg_slide_show_get_current_slide@Base 14.04.0
+ gsd_bg_slide_show_get_start_time@Base 14.04.0
+ gsd_bg_slide_show_get_total_duration@Base 14.04.0
+ gsd_bg_slide_show_get_has_multiple_sizes@Base 14.04.0
+ gsd_bg_slide_show_get_num_slides@Base 14.04.0

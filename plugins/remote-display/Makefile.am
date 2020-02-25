@@ -19,7 +19,10 @@ libremote_display_la_CFLAGS =	\
 
 libremote_display_la_LDFLAGS = $(GSD_PLUGIN_LDFLAGS)
 
-libremote_display_la_LIBADD  = $(SETTINGS_PLUGIN_LIBS)
+libremote_display_la_LIBADD  = \
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(SETTINGS_PLUGIN_LIBS)	\
+	$(NULL)
 
 libexec_PROGRAMS = usd-test-remote-display
 

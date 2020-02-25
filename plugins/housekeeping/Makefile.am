@@ -80,7 +80,13 @@ libhousekeeping_la_CFLAGS = 		\
 
 libhousekeeping_la_LDFLAGS = $(GSD_PLUGIN_LDFLAGS)
 
-libhousekeeping_la_LIBADD = $(SETTINGS_PLUGIN_LIBS) $(GIOUNIX_LIBS) $(LIBNOTIFY_LIBS)
+libhousekeeping_la_LIBADD = \
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
+	$(SETTINGS_PLUGIN_LIBS)	\
+	$(GIOUNIX_LIBS) \
+	$(LIBNOTIFY_LIBS) \
+	$(NULL)
 
 plugin_in_files = housekeeping.gnome-settings-plugin.in
 

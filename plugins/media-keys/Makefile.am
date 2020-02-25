@@ -63,6 +63,8 @@ libmedia_keys_la_LDFLAGS = 		\
 	$(GSD_PLUGIN_LDFLAGS)
 
 libmedia_keys_la_LIBADD  = 		\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
 	$(top_builddir)/plugins/common/libcommon.la			\
 	$(top_builddir)/plugins/media-keys/gvc/libgvc.la		\
 	$(MEDIA_KEYS_LIBS)						\

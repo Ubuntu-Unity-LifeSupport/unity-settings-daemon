@@ -48,6 +48,7 @@ GIO_REQUIRED_VERSION=${GLIB_REQUIRED_VERSION}
 GTK_REQUIRED_VERSION=3.7.8
 GCONF_REQUIRED_VERSION=2.6.1
 GNOME_DESKTOP_REQUIRED_VERSION=3.7.90
+GDK_PIXBUF_REQUIRED_VERSION=2.23.0
 LIBNOTIFY_REQUIRED_VERSION=0.7.3
 UPOWER_GLIB_REQUIRED_VERSION=0.9.1
 PA_REQUIRED_VERSION=2.0
@@ -147,7 +148,16 @@ dnl ---------------------------------------------------------------------------
 dnl - libunity-settings-daemon
 dnl ---------------------------------------------------------------------------
 
-PKG_CHECK_MODULES(LIBUNITY_SETTINGS_DAEMON, gtk+-3.0 >= $GTK_REQUIRED_VERSION xrandr >= $XRANDR_REQUIRED_VERSION xext >= $XEXT_REQUIRED_VERSION)
+PKG_CHECK_MODULES(LIBUNITY_SETTINGS_DAEMON, 
+				  gtk+-3.0 >= $GTK_REQUIRED_VERSION
+				  glib-2.0 >= GLIB_REQUIRED_VERSION
+				  gio-2.0 >= $GIO_REQUIRED_VERSION
+				  gnome-desktop-3.0 >= $GNOME_DESKTOP_REQUIRED_VERSION
+				  gsettings-desktop-schemas >= $GSETTINGS_DESKTOP_SCHEMAS_REQUIRED_VERSION
+				  gdk-pixbuf-2.0 >= $GDK_PIXBUF_REQUIRED_VERSION
+				  xrandr >= $XRANDR_REQUIRED_VERSION 
+				  xext >= $XEXT_REQUIRED_VERSION
+				  x11)
 PKG_CHECK_MODULES(CHECK_GL_TEXTURE_SIZE, gl x11)
 
 dnl ---------------------------------------------------------------------------
@@ -168,7 +178,10 @@ dnl ---------------------------------------------------------------------------
 dnl - background
 dnl ---------------------------------------------------------------------------
 
-PKG_CHECK_MODULES(BACKGROUND, x11 gnome-desktop-3.0 >= $GNOME_DESKTOP_REQUIRED_VERSION)
+PKG_CHECK_MODULES(BACKGROUND,
+				  gdk-pixbuf-2.0 >= $GDK_PIXBUF_REQUIRED_VERSION
+				  gnome-desktop-3.0 >= $GNOME_DESKTOP_REQUIRED_VERSION
+				  x11)
 
 dnl ---------------------------------------------------------------------------
 dnl - mouse
