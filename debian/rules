@@ -10,8 +10,6 @@ DEB_DH_MAKESHLIBS_ARGS_ALL += -X/usr/lib/unity-settings-daemon-1.0
 DEB_CONFIGURE_SCRIPT := ./autogen.sh
 DEB_CONFIGURE_EXTRA_FLAGS = --disable-packagekit --enable-ibus --enable-fcitx --enable-network-manager
 
-build/unity-settings-daemon::
-	gcc -o gnome-settings-daemon/gnome-update-wallpaper-cache debian/gnome-update-wallpaper-cache.c `pkg-config --cflags --libs glib-2.0 gdk-3.0 gdk-x11-3.0 gio-2.0 gnome-desktop-3.0`
 
 # don't configure with --libdir, but move the files manually, because
 # other files in /usr/lib/ should not change
@@ -21,7 +19,6 @@ common-install-impl::
 		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
 
 install/unity-settings-daemon::
-	/usr/bin/install -c gnome-settings-daemon/gnome-update-wallpaper-cache 'debian/tmp/usr/lib/unity-settings-daemon'
 	install -m 644 -D debian/unity-settings-daemon.user-session.upstart debian/unity-settings-daemon/usr/share/upstart/sessions/unity-settings-daemon.conf
 	install -m 644 -D debian/unity-settings-daemon.user-session.desktop debian/unity-settings-daemon/usr/share/upstart/xdg/autostart/unity-settings-daemon.desktop
 
@@ -34,5 +31,3 @@ binary-post-install/unity-settings-daemon::
 
 common-binary-post-install-arch:: list-missing
 
-clean::
-	rm -f gnome-settings-daemon/gnome-update-wallpaper-cache

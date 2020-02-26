@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+19.10.20190921-0ubuntu3) focal; urgency=medium
+
+  [ Khurshid Alam ]
+  * Fix gnome-update-wallpaper-cache build
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Wed, 26 Feb 2020 23:42:39 +0100
+
 unity-settings-daemon (15.04.1+19.10.20190921-0ubuntu2) focal; urgency=medium
 
   [ Khurshid Alam ]

@@ -29,6 +29,29 @@ usd_test_background_LDADD =				\
 	$(BACKGROUND_LIBS)				\
 	$(NULL)
 
+libexec_PROGRAMS += gnome-update-wallpaper-cache
+
+gnome_update_wallpaper_cache_SOURCES =		\
+	gnome-update-wallpaper-cache.c		\
+	$(NULL)
+
+gnome_update_wallpaper_cache_CPPFLAGS = \
+	-I$(top_srcdir)/gnome-settings-daemon		\
+	-DGNOME_SETTINGS_LOCALEDIR=\""$(datadir)/locale"\" \
+	$(AM_CPPFLAGS)
+
+gnome_update_wallpaper_cache_CFLAGS = \
+	$(SETTINGS_PLUGIN_CFLAGS)	\
+	$(BACKGROUND_CFLAGS)		\
+	$(AM_CFLAGS)
+
+gnome_update_wallpaper_cache_LDADD =				\
+	$(top_builddir)/gnome-settings-daemon/libgsd.la	\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la	\
+	$(SETTINGS_PLUGIN_LIBS)				\
+	$(BACKGROUND_LIBS)				\
+	$(NULL)
+
 plugin_LTLIBRARIES = \
 	libbackground.la		\
 	$(NULL)
