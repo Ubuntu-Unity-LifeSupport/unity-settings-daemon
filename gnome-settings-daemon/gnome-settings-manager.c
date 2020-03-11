@@ -36,7 +36,7 @@
 #include "gnome-settings-profile.h"
 #include "gsd-pnp-ids.h"
 
-#define DEFAULT_SETTINGS_PREFIX "org.gnome.settings-daemon"
+#define DEFAULT_SETTINGS_PREFIX "com.canonical.unity.settings-daemon"
 
 #define PLUGIN_EXT ".gnome-settings-plugin"
 

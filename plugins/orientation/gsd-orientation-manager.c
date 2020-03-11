@@ -67,7 +67,7 @@ struct GsdOrientationManagerPrivate
         gboolean orientation_lock;
 };
 
-#define CONF_SCHEMA "org.gnome.settings-daemon.peripherals.touchscreen"
+#define CONF_SCHEMA "com.canonical.unity.settings-daemon.peripherals.touchscreen"
 #define ORIENTATION_LOCK_KEY "orientation-lock"
 
 #define GSD_ORIENTATION_DBUS_NAME GSD_DBUS_NAME ".Orientation"

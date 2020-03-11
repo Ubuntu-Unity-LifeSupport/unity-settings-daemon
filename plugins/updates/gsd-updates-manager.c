@@ -1322,7 +1322,7 @@ gsd_updates_manager_start (GsdUpdatesManager *manager,
                           G_CALLBACK (settings_changed_cb), manager);
 
         /* get ftp settings */
-        manager->priv->settings_gsd = g_settings_new ("org.gnome.settings-daemon.plugins.updates");
+        manager->priv->settings_gsd = g_settings_new ("com.canonical.unity.settings-daemon.plugins.updates");
         g_signal_connect (manager->priv->settings_gsd, "changed",
                           G_CALLBACK (settings_gsd_changed_cb), manager);
 

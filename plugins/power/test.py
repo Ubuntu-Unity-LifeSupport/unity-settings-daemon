@@ -76,7 +76,7 @@ class PowerPluginTest(gsdtestcase.GSDTestCase):
         self.settings_screensaver = Gio.Settings('org.gnome.desktop.screensaver')
         self.settings_screensaver['lock-enabled'] = False
 
-        self.settings_gsd_power = Gio.Settings('org.gnome.settings-daemon.plugins.power')
+        self.settings_gsd_power = Gio.Settings('com.canonical.unity.settings-daemon.plugins.power')
 
         # start power plugin
         self.settings_gsd_power['active'] = False

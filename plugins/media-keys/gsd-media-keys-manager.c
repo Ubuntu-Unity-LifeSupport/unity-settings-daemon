@@ -110,8 +110,8 @@ static const gchar introspection_xml[] =
 "</node>";
 
 #define SETTINGS_INTERFACE_DIR "org.gnome.desktop.interface"
-#define SETTINGS_POWER_DIR "org.gnome.settings-daemon.plugins.power"
-#define SETTINGS_XSETTINGS_DIR "org.gnome.settings-daemon.plugins.xsettings"
+#define SETTINGS_POWER_DIR "com.canonical.unity.settings-daemon.plugins.power"
+#define SETTINGS_XSETTINGS_DIR "com.canonical.unity.settings-daemon.plugins.xsettings"
 #define SETTINGS_TOUCHPAD_DIR "org.gnome.desktop.peripherals.touchpad"
 #define UNITY_SETTINGS_INTERFACE_DIR "com.canonical.Unity.Interface"
 

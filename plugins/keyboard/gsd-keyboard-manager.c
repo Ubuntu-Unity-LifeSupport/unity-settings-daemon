@@ -69,7 +69,7 @@
 
 #define GSD_KEYBOARD_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_KEYBOARD_MANAGER, GsdKeyboardManagerPrivate))
 
-#define GSD_KEYBOARD_DIR "org.gnome.settings-daemon.peripherals.keyboard"
+#define GSD_KEYBOARD_DIR "com.canonical.unity.settings-daemon.peripherals.keyboard"
 #define GSETTINGS_KEYBOARD_SCHEMA     "org.gnome.desktop.peripherals.keyboard"
 
 #define KEY_REPEAT         "repeat"
@@ -685,7 +685,7 @@ xkb_events_filter (GdkXEvent *xev_,
 			g_debug ("New num-lock state '%s' != Old num-lock state '%s'",
 				 num_lock_state_to_string (numlock_state),
 				 num_lock_state_to_string (manager->priv->old_state));
-			g_settings_set_enum (manager->priv->gsettings,
+			g_settings_set_enum (manager->priv->settings,
 					     KEY_NUMLOCK_STATE,
 					     numlock_state);
 			manager->priv->old_state = numlock_state;
@@ -1793,9 +1793,9 @@ apply_numlock (GsdKeyboardManager *manager)
         gboolean rnumlock;
 
         g_debug ("Applying the num-lock settings");
-        settings = manager->priv->gsettings;
+        settings = manager->priv->settings;
         rnumlock = g_settings_get_boolean  (settings, KEY_REMEMBER_NUMLOCK_STATE);
-        manager->priv->old_state = g_settings_get_enum (manager->priv->gsettings, KEY_NUMLOCK_STATE);
+        manager->priv->old_state = g_settings_get_enum (manager->priv->settings, KEY_NUMLOCK_STATE);
 
         gdk_error_trap_push ();
         if (rnumlock) {
@@ -2629,12 +2629,11 @@ migrate_keyboard_settings (void)
         GsdSettingsMigrateEntry entries[] = {
                 { "repeat",          "repeat",          NULL },
                 { "repeat-interval", "repeat-interval", NULL },
-                { "delay",           "delay",           NULL },
-                { "remember-numlock-state", "remember-numlock-state", NULL },
+                { "delay",           "delay",           NULL }
         };
 
-        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.keyboard.deprecated",
-                                    "/org/gnome/settings-daemon/peripherals/keyboard/",
+        gsd_settings_migrate_check ("com.canonical.unity.settings-daemon.peripherals.keyboard.deprecated",
+                                    "/com/canonical/unity/settings-daemon/peripherals/keyboard/",
                                     "org.gnome.desktop.peripherals.keyboard",
                                     "/org/gnome/desktop/peripherals/keyboard/",
                                     entries, G_N_ELEMENTS (entries));

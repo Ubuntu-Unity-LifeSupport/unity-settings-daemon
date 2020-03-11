@@ -1401,18 +1401,18 @@ migrate_mouse_settings (void)
                 { "natural-scroll",       "natural-scroll", NULL }
         };
 
-        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.trackball.deprecated",
-                                    "/org/gnome/settings-daemon/peripherals/trackball/",
+        gsd_settings_migrate_check ("com.canonical.unity.settings-daemon.peripherals.trackball.deprecated",
+                                    "/com/canonical/unity/settings-daemon/peripherals/trackball/",
                                     "org.gnome.desktop.peripherals.trackball",
                                     "/org/gnome/desktop/peripherals/trackball/",
                                     trackball_entries, G_N_ELEMENTS (trackball_entries));
-        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.mouse.deprecated",
-                                    "/org/gnome/settings-daemon/peripherals/mouse/",
+        gsd_settings_migrate_check ("com.canonical.unity.settings-daemon.peripherals.mouse.deprecated",
+                                    "/com/canonical/unity/settings-daemon/peripherals/mouse/",
                                     "org.gnome.desktop.peripherals.mouse",
                                     "/org/gnome/desktop/peripherals/mouse/",
                                     mouse_entries, G_N_ELEMENTS (mouse_entries));
-        gsd_settings_migrate_check ("org.gnome.settings-daemon.peripherals.touchpad.deprecated",
-                                    "/org/gnome/settings-daemon/peripherals/touchpad/",
+        gsd_settings_migrate_check ("com.canonical.unity.settings-daemon.peripherals.touchpad.deprecated",
+                                    "/com/canonical/unity/settings-daemon/peripherals/touchpad/",
                                     "org.gnome.desktop.peripherals.touchpad",
                                     "/org/gnome/desktop/peripherals/touchpad/",
                                     touchpad_entries, G_N_ELEMENTS (touchpad_entries));

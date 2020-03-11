@@ -48,14 +48,14 @@
 
 #define GNOME_XSETTINGS_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GNOME_TYPE_XSETTINGS_MANAGER, GnomeXSettingsManagerPrivate))
 
-#define MOUSE_SETTINGS_SCHEMA     "org.gnome.settings-daemon.peripherals.mouse"
+#define MOUSE_SETTINGS_SCHEMA     "com.canonical.unity.settings-daemon.peripherals.mouse"
 #define INTERFACE_SETTINGS_SCHEMA "org.gnome.desktop.interface"
 #define UNITY_INTERFACE_SETTINGS_SCHEMA "com.ubuntu.user-interface.desktop"
 #define SOUND_SETTINGS_SCHEMA     "org.gnome.desktop.sound"
 #define PRIVACY_SETTINGS_SCHEMA     "org.gnome.desktop.privacy"
 #define WM_SETTINGS_SCHEMA        "org.gnome.desktop.wm.preferences"
 
-#define XSETTINGS_PLUGIN_SCHEMA "org.gnome.settings-daemon.plugins.xsettings"
+#define XSETTINGS_PLUGIN_SCHEMA "com.canonical.unity.settings-daemon.plugins.xsettings"
 #define XSETTINGS_OVERRIDE_KEY  "overrides"
 
 #define GTK_MODULES_DISABLED_KEY "disabled-gtk-modules"
@@ -367,8 +367,8 @@ translate_button_layout (GnomeXSettingsManager *manager,
 }
 
 static TranslationEntry translations [] = {
-        { "org.gnome.settings-daemon.peripherals.mouse", "double-click",   "Net/DoubleClickTime",  translate_int_int },
-        { "org.gnome.settings-daemon.peripherals.mouse", "drag-threshold", "Net/DndDragThreshold", translate_int_int },
+        { "com.canonical.unity.settings-daemon.peripherals.mouse", "double-click",   "Net/DoubleClickTime",  translate_int_int },
+        { "com.canonical.unity.settings-daemon.peripherals.mouse", "drag-threshold", "Net/DndDragThreshold", translate_int_int },
 
         { "org.gnome.desktop.interface", "gtk-color-palette",      "Gtk/ColorPalette",        translate_string_string },
         { "org.gnome.desktop.interface", "font-name",              "Gtk/FontName",            translate_string_string },

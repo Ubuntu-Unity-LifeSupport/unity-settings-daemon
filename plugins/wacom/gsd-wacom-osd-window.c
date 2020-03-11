@@ -36,7 +36,7 @@
 #define ACTION_TYPE_KEY             "action-type"
 #define CUSTOM_ACTION_KEY           "custom-action"
 #define CUSTOM_ELEVATOR_ACTION_KEY  "custom-elevator-action"
-#define RES_PATH                    "/org/gnome/settings-daemon/plugins/wacom/"
+#define RES_PATH                    "/com/canonical/unity/settings-daemon/plugins/wacom/"
 
 #define BACK_OPACITY		0.8
 #define INACTIVE_COLOR		"#ededed"

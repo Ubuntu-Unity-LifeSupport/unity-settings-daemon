@@ -2164,7 +2164,7 @@ gsd_color_manager_init (GsdColorManager *manager)
         /* use DMI data for internal panels */
         priv->dmi = gcm_dmi_new ();
 
-        priv->settings = g_settings_new ("org.gnome.settings-daemon.plugins.color");
+        priv->settings = g_settings_new ("com.canonical.unity.settings-daemon.plugins.color");
         priv->client = cd_client_new ();
         g_signal_connect (priv->client, "device-added",
                           G_CALLBACK (gcm_session_device_added_notify_cb),

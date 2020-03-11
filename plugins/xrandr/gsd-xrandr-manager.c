@@ -57,7 +57,7 @@
 
 #define GSD_XRANDR_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_XRANDR_MANAGER, GsdXrandrManagerPrivate))
 
-#define CONF_SCHEMA "org.gnome.settings-daemon.plugins.xrandr"
+#define CONF_SCHEMA "com.canonical.unity.settings-daemon.plugins.xrandr"
 #define CONF_KEY_DEFAULT_MONITORS_SETUP   "default-monitors-setup"
 #define CONF_KEY_DEFAULT_CONFIGURATION_FILE   "default-configuration-file"
 

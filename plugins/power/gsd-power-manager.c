@@ -59,8 +59,8 @@
 #define UPOWER_DBUS_INTERFACE                   "org.freedesktop.UPower"
 #define UPOWER_DBUS_INTERFACE_KBDBACKLIGHT      "org.freedesktop.UPower.KbdBacklight"
 
-#define GSD_POWER_SETTINGS_SCHEMA               "org.gnome.settings-daemon.plugins.power"
-#define GSD_XRANDR_SETTINGS_SCHEMA              "org.gnome.settings-daemon.plugins.xrandr"
+#define GSD_POWER_SETTINGS_SCHEMA               "com.canonical.unity.settings-daemon.plugins.power"
+#define GSD_XRANDR_SETTINGS_SCHEMA              "com.canonical.unity.settings-daemon.plugins.xrandr"
 
 #define GSD_POWER_DBUS_NAME                     GSD_DBUS_NAME ".Power"
 #define GSD_POWER_DBUS_PATH                     GSD_DBUS_PATH "/Power"

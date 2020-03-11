@@ -780,8 +780,8 @@ gsd_sharing_manager_init (GsdSharingManager *manager)
 
                 service = g_new0 (ServiceInfo, 1);
                 service->name = services[i];
-                path = g_strdup_printf ("/org/gnome/settings-daemon/plugins/sharing/%s/", services[i]);
-                service->settings = g_settings_new_with_path ("org.gnome.settings-daemon.plugins.sharing.service", path);
+                path = g_strdup_printf ("/com/canonical/unity/settings-daemon/plugins/sharing/%s/", services[i]);
+                service->settings = g_settings_new_with_path ("com.canonical.unity.settings-daemon.plugins.sharing.service", path);
                 g_free (path);
 
                 g_hash_table_insert (manager->priv->services, (gpointer) services[i], service);

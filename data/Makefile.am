@@ -3,7 +3,27 @@ NULL =
 apidir = $(includedir)/unity-settings-daemon-$(GSD_API_VERSION)/unity-settings-daemon
 api_DATA = gsd-enums.h
 
-gschema_in_files = com.canonical.unity.settings-daemon.plugins.media-keys.gschema.xml.in.in
+gsettings_ENUM_NAMESPACE = com.canonical.unity.settings-daemon
+gsettings_ENUM_FILES = $(top_srcdir)/data/$(api_DATA)
+
+
+gschema_in_files =							\
+	com.canonical.unity.settings-daemon.peripherals.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.peripherals.wacom.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.color.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.datetime.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.housekeeping.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.keyboard.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.media-keys.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.orientation.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.power.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.print-notifications.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.sharing.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.xrandr.gschema.xml.in.in \
+	com.canonical.unity.settings-daemon.plugins.xsettings.gschema.xml.in.in
+	
+	
 gsettings_SCHEMAS = $(gschema_in_files:.xml.in.in=.xml)
 
 gsettingsdir = $(datadir)/glib-2.0/schemas

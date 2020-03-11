@@ -35,7 +35,7 @@ has_settings (void)
 
 	list = g_settings_list_schemas ();
 	for (i = 0; list[i] != NULL; i++) {
-		if (g_str_equal (list[i], "org.gnome.settings-daemon.plugins." SCHEMA_NAME))
+		if (g_str_equal (list[i], "com.canonical.unity.settings-daemon.plugins." SCHEMA_NAME))
 			return TRUE;
 	}
 	return FALSE;
@@ -45,9 +45,9 @@ static void
 print_enable_disable_help (void)
 {
 	fprintf (stderr, "To deactivate:\n");
-	fprintf (stderr, "\tgsettings set org.gnome.settings-daemon.plugins." SCHEMA_NAME " active false\n");
+	fprintf (stderr, "\tgsettings set com.canonical.unity.settings-daemon.plugins." SCHEMA_NAME " active false\n");
 	fprintf (stderr, "To reactivate:\n");
-	fprintf (stderr, "\tgsettings set org.gnome.settings-daemon.plugins." SCHEMA_NAME " active true\n");
+	fprintf (stderr, "\tgsettings set com.canonical.unity.settings-daemon.plugins." SCHEMA_NAME " active true\n");
 }
 
 int
@@ -73,7 +73,7 @@ main (int argc, char **argv)
 	if (has_settings () == FALSE) {
 		fprintf (stderr, "The schemas for plugin '%s' isn't available, check your installation.\n", SCHEMA_NAME);
 	} else {
-		settings = g_settings_new ("org.gnome.settings-daemon.plugins." SCHEMA_NAME);
+		settings = g_settings_new ("com.canonical.unity.settings-daemon.plugins." SCHEMA_NAME);
 		if (g_settings_get_boolean (settings, "active") != FALSE) {
 			fprintf (stderr, "Plugin '%s' is not disabled. You need to disable it before launching the test application.\n", SCHEMA_NAME);
 			print_enable_disable_help ();
