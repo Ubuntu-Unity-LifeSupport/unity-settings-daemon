@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+20.04.20200325-0ubuntu1) focal; urgency=medium
+
+  [ iain.lane@canonical.com ]
+  * Stop shipping a GNOME schema (LP: #1869022)
+
+ -- iain@orangesquash.org.uk <iain@orangesquash.org.uk>  Wed, 25 Mar 2020 17:16:20 +0000
+
 unity-settings-daemon (15.04.1+20.04.20200311-0ubuntu1) focal; urgency=medium
 
   [ Khurshid Alam ]
