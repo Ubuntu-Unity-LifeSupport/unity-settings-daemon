@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+20.04.20200325-0ubuntu2) hirsute; urgency=medium
+
+  * com.canonical.unity.settings-daemon.plugins.power.gschema.xml.in.in:
+    Set default power button action to interactive.
+    This got changed during migration from gnome-settings-daemon schemas.
+
+ -- Khurshid Alam <khurshid.alam@linuxmail.org>  Thu, 15 Apr 2021 10:43:37 +0200
+
 unity-settings-daemon (15.04.1+20.04.20200325-0ubuntu1) focal; urgency=medium
 
   [ iain.lane@canonical.com ]
