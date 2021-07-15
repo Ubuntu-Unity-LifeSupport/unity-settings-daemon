@@ -50,6 +50,7 @@
 struct GsdBackgroundManagerPrivate
 {
         GSettings   *settings;
+        GSettings   *usettings;
         GsdBG     *bg;
 
         GsdBGCrossfade *fade;
@@ -72,7 +73,7 @@ static gpointer manager_object = NULL;
 static gboolean
 dont_draw_background (GsdBackgroundManager *manager)
 {
-        return !g_settings_get_boolean (manager->priv->settings,
+        return !g_settings_get_boolean (manager->priv->usettings,
                                         "draw-background");
 }
 
@@ -497,8 +498,11 @@ gsd_background_manager_start (GsdBackgroundManager *manager,
         gnome_settings_profile_start (NULL);
 
         manager->priv->settings = g_settings_new ("org.gnome.desktop.background");
-        g_signal_connect (manager->priv->settings, "changed::draw-background",
+        manager->priv->usettings = g_settings_new ("com.canonical.unity.desktop.background");
+
+        g_signal_connect (manager->priv->usettings, "changed::draw-background",
                           G_CALLBACK (draw_background_changed), manager);
+
         g_signal_connect (manager->priv->settings, "changed::picture-uri",
                           G_CALLBACK (picture_uri_changed), manager);
 
@@ -541,9 +545,18 @@ gsd_background_manager_stop (GsdBackgroundManager *manager)
                                               settings_change_event_cb,
                                               manager);
 
+        g_signal_handlers_disconnect_by_func (manager->priv->usettings,
+                                              settings_change_event_cb,
+                                              manager);
+
         if (p->settings != NULL) {
                 g_object_unref (p->settings);
                 p->settings = NULL;
+        }
+
+        if (p->usettings != NULL) {
+                g_object_unref (p->usettings);
+                p->usettings = NULL;
         }
 
         if (p->bg != NULL) {

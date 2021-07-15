@@ -320,7 +320,7 @@ gsd_bg_load_from_preferences (GsdBG   *bg,
 	g_return_if_fail (GSD_IS_BG (bg));
 	g_return_if_fail (G_IS_SETTINGS (settings));
 
-	background_settings = g_settings_new ("org.gnome.desktop.background");
+	background_settings = g_settings_new ("com.canonical.unity.desktop.background");
 	bg->is_enabled = g_settings_get_boolean (background_settings, BG_KEY_DRAW_BACKGROUND);
 	g_object_unref (background_settings);
 
@@ -357,6 +357,8 @@ gsd_bg_save_to_preferences (GsdBG   *bg,
 	gchar *secondary;
 	gchar *uri;
 
+	GSettings *background_settings;
+
 	g_return_if_fail (GSD_IS_BG (bg));
 	g_return_if_fail (G_IS_SETTINGS (settings));
 
@@ -370,7 +372,9 @@ gsd_bg_save_to_preferences (GsdBG   *bg,
 		uri = g_filename_to_uri (bg->filename, NULL, NULL);
 	if (uri == NULL)
 		uri = g_strdup ("");
-	g_settings_set_boolean (settings, BG_KEY_DRAW_BACKGROUND, bg->is_enabled);
+	background_settings = g_settings_new ("com.canonical.unity.desktop.background");
+	g_settings_set_boolean (background_settings, BG_KEY_DRAW_BACKGROUND, bg->is_enabled);
+	g_object_unref (background_settings);
 	g_settings_set_string (settings, BG_KEY_PICTURE_URI, uri);
 	g_settings_set_string (settings, BG_KEY_PRIMARY_COLOR, primary);
 	g_settings_set_string (settings, BG_KEY_SECONDARY_COLOR, secondary);

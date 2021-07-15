@@ -1,3 +1,13 @@
+unity-settings-daemon (15.04.1+21.10.20210715-0ubuntu1) impish; urgency=medium
+
+  [ Khurshid Alam ]
+  * Touchpad scroll-method was migrated before from u-s-d to gesetting-
+    desktop-schemas. Now that gsettings-desktop-schemas removed that
+    schema, port it back under unity-settings-daemon schemas (LP:
+    #1933646)
+
+ -- Sebastien Bacher <seb128@ubuntu.com>  Thu, 15 Jul 2021 08:25:34 +0000
+
 unity-settings-daemon (15.04.1+20.04.20200325-0ubuntu2) hirsute; urgency=medium
 
   * com.canonical.unity.settings-daemon.plugins.power.gschema.xml.in.in:

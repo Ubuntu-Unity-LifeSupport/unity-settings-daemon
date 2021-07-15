@@ -60,6 +60,7 @@
 #define GNOME_DESKTOP_INTERFACE_DIR  "org.gnome.desktop.interface"
 #define GSETTINGS_MOUSE_SCHEMA     "org.gnome.desktop.peripherals.mouse"
 #define GSETTINGS_TOUCHPAD_SCHEMA  "org.gnome.desktop.peripherals.touchpad"
+#define USD_TOUCHPAD_SCHEMA  "com.canonical.unity.settings-daemon.peripherals.touchpad"
 
 /* Keys for both touchpad and mouse */
 #define KEY_LEFT_HANDED         "left-handed"                /* a boolean for mouse, an enum for touchpad */
@@ -80,6 +81,7 @@ struct GsdMouseManagerPrivate
 {
         guint start_idle_id;
         GSettings *touchpad_settings;
+        GSettings *usd_touchpad_settings;
         GSettings *mouse_settings;
         GSettings *mouse_a11y_settings;
         GSettings *interface_settings;
@@ -737,7 +739,7 @@ set_scroll_method (GsdMouseManager         *manager,
                 if (!(data[3]) && method == GSD_TOUCHPAD_SCROLL_METHOD_TWO_FINGER_SCROLLING) {
                         g_warning ("Two finger scroll is not supported by %s", gdk_device_get_name (device));
                         method = GSD_TOUCHPAD_SCROLL_METHOD_EDGE_SCROLLING;
-                        g_settings_set_enum (manager->priv->touchpad_settings, KEY_SCROLL_METHOD, method);
+                        g_settings_set_enum (manager->priv->usd_touchpad_settings, KEY_SCROLL_METHOD, method);
                 }
 
                 XFree (data);
@@ -954,7 +956,7 @@ set_mouse_settings (GsdMouseManager *manager,
         set_motion (manager, device);
 
         set_tap_to_click (device, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_TAP_TO_CLICK), touchpad_left_handed);
-        set_scroll_method (manager, device, g_settings_get_enum (manager->priv->touchpad_settings, KEY_SCROLL_METHOD));
+        set_scroll_method (manager, device, g_settings_get_enum (manager->priv->usd_touchpad_settings, KEY_SCROLL_METHOD));
         set_horiz_scroll (device, TRUE);
         set_natural_scroll (manager, device, g_settings_get_boolean (manager->priv->touchpad_settings, KEY_NATURAL_SCROLL_ENABLED));
         if (!get_touchpad_enabled (manager))
@@ -1077,10 +1079,10 @@ touchpad_callback (GSettings       *settings,
                 if (g_str_equal (key, KEY_TAP_TO_CLICK)) {
                         gboolean mouse_left_handed;
                         mouse_left_handed = g_settings_get_boolean (manager->priv->mouse_settings, KEY_LEFT_HANDED);
-                        set_tap_to_click (device, g_settings_get_boolean (settings, key),
+                        set_tap_to_click (device, g_settings_get_boolean (manager->priv->touchpad_settings, key),
                                           get_touchpad_handedness (manager, mouse_left_handed));
                 } else if (g_str_equal (key, KEY_SCROLL_METHOD)) {
-                        set_scroll_method (manager, device, g_settings_get_enum (settings, key));
+                        set_scroll_method (manager, device, g_settings_get_enum (manager->priv->usd_touchpad_settings, key));
                         set_horiz_scroll (device, TRUE);
                 } else if (g_str_equal (key, KEY_SEND_EVENTS)) {
                         if (!get_touchpad_enabled (manager))
@@ -1094,7 +1096,7 @@ touchpad_callback (GSettings       *settings,
                         mouse_left_handed = g_settings_get_boolean (manager->priv->mouse_settings, KEY_LEFT_HANDED);
                         set_left_handed (manager, device, mouse_left_handed, get_touchpad_handedness (manager, mouse_left_handed));
                 } else if (g_str_equal (key, KEY_NATURAL_SCROLL_ENABLED)) {
-                        set_natural_scroll (manager, device, g_settings_get_boolean (settings, key));
+                        set_natural_scroll (manager, device, g_settings_get_boolean (manager->priv->touchpad_settings, key));
                 }
         }
         g_list_free (devices);
@@ -1239,6 +1241,10 @@ gsd_mouse_manager_idle_cb (GsdMouseManager *manager)
         g_signal_connect (manager->priv->touchpad_settings, "changed",
                           G_CALLBACK (touchpad_callback), manager);
 
+        manager->priv->usd_touchpad_settings = g_settings_new (USD_TOUCHPAD_SCHEMA);
+        g_signal_connect (manager->priv->usd_touchpad_settings, "changed",
+                          G_CALLBACK (touchpad_callback), manager);
+
         manager->priv->syndaemon_spawned = FALSE;
 
         set_locate_pointer (manager, g_settings_get_boolean (manager->priv->interface_settings, KEY_LOCATE_POINTER));
@@ -1324,6 +1330,7 @@ gsd_mouse_manager_stop (GsdMouseManager *manager)
         g_clear_object (&p->mouse_a11y_settings);
         g_clear_object (&p->mouse_settings);
         g_clear_object (&p->touchpad_settings);
+        g_clear_object (&p->usd_touchpad_settings);
 
         set_locate_pointer (manager, FALSE);
 
@@ -1392,7 +1399,6 @@ migrate_mouse_settings (void)
         GsdSettingsMigrateEntry touchpad_entries[] = {
                 { "disable-while-typing", NULL,             NULL },
                 { "horiz-scroll-enabled", NULL,             NULL },
-                { "scroll-method",        "scroll-method",  NULL },
                 { "tap-to-click",         "tap-to-click",   NULL },
                 { "touchpad-enabled",     "send-events",    map_send_events },
                 { "left-handed",          "left-handed",    NULL },
