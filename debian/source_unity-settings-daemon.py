@@ -3,7 +3,7 @@ from apport.hookutils import *
 
 def add_info(report):
 	# the issue is not in the unity-settings-daemon code so reassign
-	if "Stacktrace" in report and "/usr/libg/nome-settings-daemon-3.0" in report["Stacktrace"]:
+	if "Stacktrace" in report and "/usr/lib/gnome-settings-daemon-3.0" in report["Stacktrace"]:
 		for words in report["Stacktrace"].split():
 			if words.startswith("/usr/lib/unity-settings-daemon-3.0"):
 			    if apport.packaging.get_file_package(words) != 'unity-settings-daemon':
