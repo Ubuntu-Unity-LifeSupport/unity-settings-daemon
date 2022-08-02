@@ -2756,6 +2756,8 @@ create_thumbnail_for_filename (GnomeDesktopThumbnailFactory *factory,
 	time_t mtime;
 	GdkPixbuf *orig, *result = NULL;
 	char *uri;
+	GTask *task;
+	GError *error = NULL;
 	
 	mtime = get_mtime (filename);
 	
@@ -2796,11 +2798,26 @@ create_thumbnail_for_filename (GnomeDesktopThumbnailFactory *factory,
 						g_strdup_printf ("%d", orig_width), g_free);
 			
 			g_object_unref (orig);
-			
+
+#if defined(GNOME_DESKTOP_PLATFORM_VERSION) && GNOME_DESKTOP_PLATFORM_VERSION >= 43
+			gnome_desktop_thumbnail_factory_save_thumbnail (factory, result, uri, mtime, NULL, &error);
+				if (error) {
+					g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Thumbnailing failed: %s", error->message);
+					g_error_free (error);
+				}
+		}
+		else {
+			gnome_desktop_thumbnail_factory_create_failed_thumbnail (factory, uri, mtime, NULL, &error);
+				if (error) {
+					g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Thumbnailing failed: %s", error->message);
+					g_error_free (error);
+				}
+#else
 			gnome_desktop_thumbnail_factory_save_thumbnail (factory, result, uri, mtime);
 		}
 		else {
 			gnome_desktop_thumbnail_factory_create_failed_thumbnail (factory, uri, mtime);
+#endif
 		}
 	}
 

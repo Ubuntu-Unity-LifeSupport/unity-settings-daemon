@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu1) kinetic; urgency=medium
+
+  * Update for gnome-desktop 43 thumbnail API changes
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 02 Aug 2022 10:16:01 -0400
+
 unity-settings-daemon (15.04.1+21.10.20220207-0ubuntu1) jammy; urgency=medium
 
   * No-change rebuild against latest libwacom
