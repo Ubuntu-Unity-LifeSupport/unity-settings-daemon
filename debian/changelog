@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu2) noble; urgency=medium
+
+  * No-change rebuild against libglib2.0-0t64
+
+ -- Steve Langasek <steve.langasek@ubuntu.com>  Fri, 08 Mar 2024 07:53:41 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu1) kinetic; urgency=medium
 
   * Update for gnome-desktop 43 thumbnail API changes
