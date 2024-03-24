@@ -1,3 +1,9 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu4) noble; urgency=medium
+
+  * No-change rebuild against libcanberra t64.
+
+ -- Matthias Klose <doko@ubuntu.com>  Sun, 24 Mar 2024 14:46:39 +0100
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu3) noble; urgency=medium
 
   * No-change rebuild against libglib2.0-0t64
