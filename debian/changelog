@@ -1,3 +1,13 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu6) questing; urgency=medium
+
+  * Ignore new compiler errors incompatible-pointer-types, implicit-int,
+    & return-mismatch
+  * Stop using gnome CDBS rules since they are no longer provided
+  * Ensure we run dh_translations
+  * Use the non-deprecated libgdk-pixbuf-2.0-dev (LP: #2118581)
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 21 Sep 2025 14:32:26 -0400
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu5) noble; urgency=medium
 
   * No-change rebuild for CVE-2024-3094

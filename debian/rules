@@ -2,9 +2,10 @@
 
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/rules/utils.mk
-include /usr/share/cdbs/1/class/gnome.mk
+include /usr/share/cdbs/1/class/autotools.mk
 
 LDFLAGS += -Wl,-O1 -Wl,-z,defs -Wl,--warn-unresolved-symbols -Wl,--as-needed
+CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=implicit-int -Wno-error=return-mismatch
 
 DEB_DH_MAKESHLIBS_ARGS_ALL += -X/usr/lib/unity-settings-daemon-1.0
 DEB_CONFIGURE_SCRIPT := ./autogen.sh
@@ -28,6 +29,7 @@ binary-install/unity-settings-daemon::
 
 binary-post-install/unity-settings-daemon::
 	dh_migrations
+	dh_translations
 
 common-binary-post-install-arch:: list-missing
 
