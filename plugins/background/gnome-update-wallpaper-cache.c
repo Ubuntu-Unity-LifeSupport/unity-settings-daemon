@@ -31,7 +31,7 @@ static GOptionEntry entries[] =
   { NULL }
 };
 
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
     GOptionContext *context = NULL;
     GError         *error = NULL;
