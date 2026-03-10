@@ -2357,7 +2357,7 @@ do_touchscreen_mapping (GsdXrandrManager *manager)
         GsdRROutputInfo *laptop_output;
 
         if (!supports_xinput_devices ())
-                return;
+                return FALSE;
 
         current = gsd_rr_config_new_current (screen, NULL);
         laptop_output = get_mappable_output_info (manager, screen, current);
