@@ -29,7 +29,7 @@
 #include <stdlib.h>
 
 #include "gcm-edid.h"
-#include "gsd-pnp-ids.h"
+#include "../../gnome-settings-daemon/gsd-pnp-ids.h"
 
 static void     gcm_edid_finalize       (GObject     *object);
 
