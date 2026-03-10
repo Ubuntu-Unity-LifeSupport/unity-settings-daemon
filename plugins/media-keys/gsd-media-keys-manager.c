@@ -344,7 +344,7 @@ static const char *
 calculate_icon_name (gint value, const char **icon_names)
 {
         value = CLAMP (value, 0, 100);
-        gint length = g_strv_length (icon_names);
+        gint length = g_strv_length ((gchar**) icon_names);
         gint s = (length - 1) * value / 100 + 1;
         s = CLAMP (s, 1, length - 1);
 
