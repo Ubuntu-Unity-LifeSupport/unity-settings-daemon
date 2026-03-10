@@ -62,7 +62,7 @@ gcm_test_edid_func (void)
         g_assert (ret);
 
         g_assert_cmpstr (gcm_edid_get_monitor_name (edid), ==, "L225W");
-        g_assert_cmpstr (gcm_edid_get_vendor_name (edid), ==, "Goldstar Company Ltd");
+        g_assert_cmpstr (gcm_edid_get_vendor_name (edid), ==, "LG Electronics");
         g_assert_cmpstr (gcm_edid_get_serial_number (edid), ==, "34398");
         g_assert_cmpstr (gcm_edid_get_eisa_id (edid), ==, NULL);
         g_assert_cmpstr (gcm_edid_get_checksum (edid), ==, "0bb44865bb29984a4bae620656c31368");
@@ -83,7 +83,7 @@ gcm_test_edid_func (void)
         g_assert (ret);
 
         g_assert_cmpstr (gcm_edid_get_monitor_name (edid), ==, NULL);
-        g_assert_cmpstr (gcm_edid_get_vendor_name (edid), ==, "IBM France");
+        g_assert_cmpstr (gcm_edid_get_vendor_name (edid), ==, "IBM Brasil");
         g_assert_cmpstr (gcm_edid_get_serial_number (edid), ==, NULL);
         g_assert_cmpstr (gcm_edid_get_eisa_id (edid), ==, "LTN154P2-L05");
         g_assert_cmpstr (gcm_edid_get_checksum (edid), ==, "e1865128c7cd5e5ed49ecfc8102f6f9c");
