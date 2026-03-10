@@ -2,12 +2,10 @@ Source: unity-settings-daemon
 Section: gnome
 Priority: optional
 Maintainer: Ubuntu Desktop Team <ubuntu-desktop@lists.ubuntu.com>
-Build-Depends: cdbs,
-               debhelper (>= 9),
+Build-Depends: debhelper (>= 9),
                dh-sequence-translations,
                gtk-doc-tools,
                dh-autoreconf,
-               dh-migrations,
                autotools-dev,
                intltool (>= 0.37.1),
                libdbus-glib-1-dev (>= 0.74),
@@ -49,6 +47,7 @@ Build-Depends: cdbs,
                libgl1-mesa-dev,
                libxkbfile-dev,
                xkb-data,
+               python-is-python3
 Standards-Version: 3.9.3
 Vcs-Bzr: https://code.launchpad.net/~unity-settings-daemon-team/unity-settings-daemon/trunk
 X-Ubuntu-Use-Langpack: yes
