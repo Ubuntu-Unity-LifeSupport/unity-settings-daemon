@@ -98,7 +98,7 @@ static void dialog_create(dialog_window *d, bool show_headset, bool show_mic)
 
     d->label = gtk_label_new(_("What kind of device did you plug in?"));
     gtk_misc_set_alignment(GTK_MISC(d->label), 0.5, 0.5);
-    gtk_box_pack_start(GTK_CONTAINER(d->v_box), d->label, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(d->v_box), d->label, FALSE, FALSE, 6);
 
     d->hp_btn = create_icon_button(WDYPI_DIALOG_HEADPHONES, _("Headphones"), "audio-headphones");
     gtk_box_pack_start(GTK_BOX(d->icon_box), d->hp_btn, FALSE, TRUE, 0);
@@ -110,7 +110,7 @@ static void dialog_create(dialog_window *d, bool show_headset, bool show_mic)
         d->mic_btn = create_icon_button(WDYPI_DIALOG_MICROPHONE, _("Microphone"), "audio-input-microphone");
         gtk_box_pack_start(GTK_BOX(d->icon_box), d->mic_btn, FALSE, TRUE, 0);
     }
-    gtk_box_pack_start(GTK_CONTAINER(d->v_box), d->icon_box, FALSE, FALSE, 6);
+    gtk_box_pack_start(GTK_BOX(d->v_box), d->icon_box, FALSE, FALSE, 6);
 
     d->cancel_btn = gtk_dialog_add_button(GTK_DIALOG(d->dialog), _("Cancel"), GTK_RESPONSE_CANCEL);
     d->settings_btn = gtk_dialog_add_button(GTK_DIALOG(d->dialog), _("Sound Settings…"), GTK_RESPONSE_YES);
