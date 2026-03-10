@@ -1132,7 +1132,7 @@ manager_notify_is_loaded_cb (GObject    *object,
                         user_notify_is_loaded_cb (G_OBJECT (user), NULL, user_data);
                 else
                         g_signal_connect (user, "notify::is-loaded",
-                                          user_notify_is_loaded_cb, user_data);
+                                          G_CALLBACK(user_notify_is_loaded_cb), user_data);
         }
 }
 
