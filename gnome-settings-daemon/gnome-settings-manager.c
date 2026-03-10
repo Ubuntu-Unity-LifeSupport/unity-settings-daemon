@@ -91,6 +91,29 @@ static void signal_cache_free (SignalCache *cache)
         g_free (cache);
 }
 
+/*
+ * This function is unsafe because it might lead to freeing arbitrary memory
+ * if called on incorrectly casted pointer.
+ */
+static void signal_cache_free_unsafe (void *data)
+{
+        if (data == NULL) {
+                return;
+        }
+
+        SignalCache *cache  = (SignalCache*) data;
+
+        if (cache->name != NULL) {
+                g_free (cache->name);
+        }
+
+        if (cache->signal != NULL) {
+                g_free (cache->signal);
+        }
+
+        g_free (cache);
+}
+
 GQuark
 gnome_settings_manager_error_quark (void)
 {
@@ -465,7 +488,7 @@ gnome_settings_manager_stop (GnomeSettingsManager *manager)
         /* This will be called from both stop_manager and dispose, so we need to
          * prevent the queue being freed twice */
         if (manager->priv->signal_queue != NULL) {
-            g_queue_free_full (manager->priv->signal_queue, signal_cache_free);
+            g_queue_free_full (manager->priv->signal_queue, signal_cache_free_unsafe);
             manager->priv->signal_queue = NULL;
         }
         g_clear_pointer (&manager->priv->whitelist, g_strfreev);
