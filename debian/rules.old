@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/rules/utils.mk
+include /usr/share/cdbs/1/class/autotools.mk
+
+LDFLAGS += -Wl,-O1 -Wl,-z,defs -Wl,--warn-unresolved-symbols -Wl,--as-needed
+CFLAGS += -Wno-error=incompatible-pointer-types -Wno-error=implicit-int -Wno-error=return-mismatch
+
+DEB_DH_MAKESHLIBS_ARGS_ALL += -X/usr/lib/unity-settings-daemon-1.0
+DEB_CONFIGURE_SCRIPT := ./autogen.sh
+DEB_CONFIGURE_EXTRA_FLAGS = --disable-packagekit --enable-ibus --enable-fcitx --enable-network-manager
+
+
+# don't configure with --libdir, but move the files manually, because
+# other files in /usr/lib/ should not change
+common-install-impl::
+	mkdir -p debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv debian/tmp/usr/lib/lib*.so* debian/tmp/usr/lib/pkgconfig \
+		debian/tmp/usr/lib/$(DEB_HOST_MULTIARCH)
+
+install/unity-settings-daemon::
+	install -m 644 -D debian/unity-settings-daemon.user-session.upstart debian/unity-settings-daemon/usr/share/upstart/sessions/unity-settings-daemon.conf
+	install -m 644 -D debian/unity-settings-daemon.user-session.desktop debian/unity-settings-daemon/usr/share/upstart/xdg/autostart/unity-settings-daemon.desktop
+
+binary-install/unity-settings-daemon::
+	find debian -name '*.a' -delete
+	find debian -name '*.la' -delete
+
+binary-post-install/unity-settings-daemon::
+	dh_migrations
+	dh_translations
+
+common-binary-post-install-arch:: list-missing
+

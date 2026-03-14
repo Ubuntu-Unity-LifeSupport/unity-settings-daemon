@@ -1,0 +1,2 @@
+Edit Makefile in plugins/screensaver-proxy to include library from gnome-settings-daemon/.libs (add -lunity-settings-daemon and -L./gnome-settings-daemon/.libs)
+Edit Makefile in plugins/color to include library from gnome-settings-daemon/.libs (add -lunity-settings-daemon and -L../../gnome-settings/daemon/.libs)
