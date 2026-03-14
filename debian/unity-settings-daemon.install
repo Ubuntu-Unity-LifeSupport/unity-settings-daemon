@@ -1,5 +1,5 @@
 etc
-usr/lib/unity-settings-daemon*
+usr/lib/*/unity-settings-daemon*
 usr/share/icons
 usr/share/locale
 usr/share/unity-settings-daemon
