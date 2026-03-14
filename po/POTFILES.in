@@ -1,7 +1,10 @@
 # Files with translatable strings.
 # Please keep this file in alphabetical order.
 data/unity-settings-daemon.desktop.in.in
+gnome-settings-daemon/display-name.c
 gnome-settings-daemon/main.c
+gnome-settings-daemon/gsd-rr-config.c
+gnome-settings-daemon/gsd-rr.c
 [type: gettext/ini]plugins/a11y-keyboard/a11y-keyboard.gnome-settings-plugin.in
 plugins/a11y-keyboard/gsd-a11y-keyboard-manager.c
 [type: gettext/ini]plugins/a11y-settings/a11y-settings.gnome-settings-plugin.in
