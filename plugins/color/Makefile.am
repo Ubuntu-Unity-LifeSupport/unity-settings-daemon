@@ -63,6 +63,7 @@ gcm_self_test_SOURCES =			\
 gcm_self_test_LDADD =			\
 	$(COLOR_LIBS)			\
 	$(LCMS_LIBS)			\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la    \
 	$(SETTINGS_PLUGIN_LIBS)		\
 	-lm
 
