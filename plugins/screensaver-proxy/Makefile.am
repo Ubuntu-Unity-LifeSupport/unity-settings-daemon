@@ -47,6 +47,7 @@ usd_test_screensaver_proxy_CFLAGS =			\
 
 usd_test_screensaver_proxy_LDADD =						\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la		\
+	$(top_builddir)/gnome-settings-daemon/libunity-settings-daemon.la    \
 	$(top_builddir)/plugins/common/libcommon.la		\
 	$(SETTINGS_DAEMON_LIBS)			\
 	$(SETTINGS_PLUGIN_LIBS)
