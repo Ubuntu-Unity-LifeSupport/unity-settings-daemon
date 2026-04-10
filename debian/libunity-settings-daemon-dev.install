@@ -1,0 +1,2 @@
+usr/lib/*/libunity-settings-daemon.a /usr/lib/${DEB_HOST_MULTIARCH}/
+usr/lib/*/libunity-settings-daemon.la /usr/lib/${DEB_HOST_MULTIARCH}/

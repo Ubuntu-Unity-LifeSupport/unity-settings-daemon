@@ -1,9 +1,16 @@
 etc
 usr/lib/*/unity-settings-daemon*
-usr/share/icons
+usr/lib/udev/rules.d/61-unity-settings-daemon-rfkill.rules
+usr/libexec/* /usr/lib/unity-settings-daemon/
 usr/share/locale
 usr/share/unity-settings-daemon
 usr/share/polkit-1
+usr/share/icons/hicolor/16x16/apps/usd-xrandr.png
+usr/share/icons/hicolor/22x22/apps/usd-xrandr.png
+usr/share/icons/hicolor/24x24/apps/usd-xrandr.png
+usr/share/icons/hicolor/32x32/apps/usd-xrandr.png
+usr/share/icons/hicolor/scalable/apps/usd-xrandr.svg
+usr/share/man/man1/unity-settings-daemon.1
 debian/source_unity-settings-daemon.py /usr/share/apport/package-hooks
 debian/user/unity-settings-daemon.service /usr/lib/systemd/user/
 debian/user/unity-settings-daemon.override /usr/share/upstart/systemd-session/upstart/
