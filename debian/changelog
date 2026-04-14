@@ -1,3 +1,23 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7) resolute; urgency=medium
+
+  * Fix compilation errors:
+    * incompatible pointer types,
+    * missing return types,
+    * improper callback types,
+    * wrong arguments to gtk_box_pack_start(),
+    * missing headers,
+  * Fix outdated display panel vendor names in sefltests,
+  * Migrate from CDBS to DebHelper (remove cdbs and dh-migration from
+    build-depends),
+  * Add python-is-python3 to build-depends,
+  * Fix conflicts with gnome-settings-daemon when installing udev rules for
+    rfkill plugin,
+  * Fix build error due to POTFILES,
+  * Fix plugin link errors due to missing linkage against
+    libunity-settings-daemon.so during build
+
+ -- Tomasz Jeruzalski <tomekdev17@gmail.com>  Tue, 14 Apr 2026 22:59:17 +0200
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu6) questing; urgency=medium
 
   * Ignore new compiler errors incompatible-pointer-types, implicit-int,
