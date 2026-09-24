@@ -1579,6 +1579,10 @@ gsd_color_manager_stop (GsdColorManager *manager)
 {
         g_debug ("Stopping color manager");
 
+        /* the session proxy is shared by every plugin and outlives this one */
+        if (manager->priv->session != NULL)
+                g_signal_handlers_disconnect_by_data (manager->priv->session, manager);
+
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->client);
         g_clear_object (&manager->priv->profile_store);
@@ -2143,8 +2147,9 @@ gsd_color_manager_init (GsdColorManager *manager)
 
         /* track the active session */
         priv->session = gnome_settings_bus_get_session_proxy ();
-        g_signal_connect (priv->session, "g-properties-changed",
-                          G_CALLBACK (gcm_session_active_changed_cb), manager);
+        g_signal_connect_object (priv->session, "g-properties-changed",
+                                 G_CALLBACK (gcm_session_active_changed_cb),
+                                 manager, 0);
 
         /* set the _ICC_PROFILE atoms on the root screen */
         priv->gdk_window = gdk_screen_get_root_window (gdk_screen_get_default ());
@@ -2196,7 +2201,8 @@ gsd_color_manager_finalize (GObject *object)
 
         manager = GSD_COLOR_MANAGER (object);
 
-        g_signal_handlers_disconnect_by_data (manager->priv->session, manager);
+        if (manager->priv->session != NULL)
+                g_signal_handlers_disconnect_by_data (manager->priv->session, manager);
 
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->client);
