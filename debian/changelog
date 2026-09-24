@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity1) resolute; urgency=medium
+
+  * plugins/cursor: don't hide the pointer when the plugin starts; it
+    could stay invisible for the whole session (known issue #1). Based
+    on the unreleased 0ubuntu7 from ubuntu/devel, which fixes the build
+    with the current toolchain.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Thu, 24 Sep 2026 07:17:11 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7) resolute; urgency=medium
 
   * Fix compilation errors:
