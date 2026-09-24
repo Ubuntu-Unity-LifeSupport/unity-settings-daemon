@@ -8,3 +8,7 @@ CONFIGURE_EXTRA_FLAGS = --disable-packagekit --enable-ibus --enable-fcitx --enab
 override_dh_auto_configure:
 	dh_auto_configure -- $(CONFIGURE_EXTRA_FLAGS)
 
+# The test suite needs an X display (gcm-self-test calls gtk_init). CDBS
+# did not run it; debhelper does.
+override_dh_auto_test:
+	xvfb-run -a dh_auto_test

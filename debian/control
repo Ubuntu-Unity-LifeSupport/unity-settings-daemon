@@ -2,7 +2,9 @@ Source: unity-settings-daemon
 Section: gnome
 Priority: optional
 Maintainer: Ubuntu Desktop Team <ubuntu-desktop@lists.ubuntu.com>
-Build-Depends: debhelper-compat (= 13),
+Build-Depends: xauth,
+               xvfb,
+               debhelper-compat (= 13),
                dh-sequence-translations,
                gtk-doc-tools,
                dh-autoreconf,
