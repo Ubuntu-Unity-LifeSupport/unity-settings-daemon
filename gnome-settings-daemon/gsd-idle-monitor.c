@@ -900,8 +900,6 @@ on_bus_acquired (GDBusConnection *connection,
                            G_CALLBACK (on_device_removed), manager, 0);
 
   g_dbus_object_manager_server_set_connection (manager, connection);
-
-  gdk_window_add_filter (NULL, xevent_filter, NULL);
 }
 
 static void
@@ -918,8 +916,6 @@ on_name_lost (GDBusConnection *connection,
               gpointer         user_data)
 {
   g_warning ("Lost or failed to acquire name %s\n", name);
-
-  gdk_window_remove_filter (NULL, xevent_filter, NULL);
 }
 
 static void
@@ -962,6 +958,14 @@ gsd_idle_monitor_init_dbus (gboolean replace)
 
   xsync = g_slice_new0 (GsdXSync);
   init_xsync_global();
+
+  /* Alarm events drive every idle and user-active watch in this process
+   * (cursor, power, screensaver-proxy), not only the D-Bus export, so the
+   * filter must not depend on owning the bus name: it used to be added in
+   * on_bus_acquired and removed in on_name_lost, and a name lost and then
+   * acquired again (two instances starting at once) left it removed for
+   * good - the pointer stayed hidden and no idle watch fired again. */
+  gdk_window_add_filter (NULL, xevent_filter, NULL);
 
   dbus_name_id = g_bus_own_name (G_BUS_TYPE_SESSION,
                                  "org.gnome.Mutter.IdleMonitor",
