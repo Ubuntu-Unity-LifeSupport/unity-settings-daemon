@@ -1,3 +1,20 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity4) resolute; urgency=medium
+
+  * idle-monitor: keep the X event filter when
+    org.gnome.Mutter.IdleMonitor is lost and acquired again; the pointer
+    stayed hidden for the session (Ubuntu Unity 26.04 known issue #1)
+    and no idle watch fired.
+  * Start the daemon once per session, from the systemd user unit
+    through unity-settings-daemon-localeexec; the xdg autostart entry is
+    skipped under systemd (X-systemd-skip).
+  * debian/rules: configure with libexecdir /usr/lib/unity-settings-
+    daemon again; autostart entries, localeexec and the backlight and
+    Wacom LED polkit actions pointed at /usr/libexec.
+  * Revert 'cursor: don't hide the pointer when the plugin starts'
+    (+unity1): the cause was the idle monitor.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Fri, 25 Sep 2026 22:43:30 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity3) resolute; urgency=medium
 
   * plugins/color: create the plugin's resources when it starts, not
