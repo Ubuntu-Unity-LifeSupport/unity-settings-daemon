@@ -311,11 +311,9 @@ gsd_cursor_manager_start (GsdCursorManager  *manager,
                 return FALSE;
         }
 
-        /* Leave the cursor shown: it is hidden only once a touchscreen is the
-         * active device. Hiding it here relied on a per-device idle monitor
-         * reporting the mouse as active before the user saw anything; when
-         * that report does not come, the pointer stays invisible for the
-         * whole session while the mouse works. */
+        /* Start by hiding the cursor, and then initialising the default
+         * root window cursor, as the window manager shouldn't do that. */
+        set_cursor_visibility (manager, FALSE);
 
         gnome_settings_profile_end (NULL);
 
