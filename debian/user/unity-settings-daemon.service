@@ -3,5 +3,5 @@ Description=Unity Settings Daemon
 PartOf=graphical-session.target
 
 [Service]
-ExecStart=/usr/lib/unity-settings-daemon/unity-settings-daemon
+ExecStart=/usr/lib/unity-settings-daemon/unity-settings-daemon-localeexec
 Restart=on-failure
