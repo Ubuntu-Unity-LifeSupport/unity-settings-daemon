@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity3) resolute; urgency=medium
+
+  * plugins/color: create the plugin's resources when it starts, not
+    when it is constructed; switched off and on, it stayed dead until
+    unity-settings-daemon was restarted.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Fri, 25 Sep 2026 00:01:55 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity2) resolute; urgency=medium
 
   * plugins/color: disconnect from the shared session proxy when the
