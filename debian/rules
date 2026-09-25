@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-CONFIGURE_EXTRA_FLAGS = --disable-packagekit --enable-ibus --enable-fcitx --enable-network-manager
+CONFIGURE_EXTRA_FLAGS = --libexecdir=/usr/lib/unity-settings-daemon --disable-packagekit --enable-ibus --enable-fcitx --enable-network-manager
 
 %:
 	dh $@ --with autoreconf,translations
