@@ -65,6 +65,7 @@ enum {
 static void     gsd_color_manager_class_init  (GsdColorManagerClass *klass);
 static void     gsd_color_manager_init        (GsdColorManager      *color_manager);
 static void     gsd_color_manager_finalize    (GObject             *object);
+static void     gcm_session_create_resources  (GsdColorManager      *manager);
 
 G_DEFINE_TYPE (GsdColorManager, gsd_color_manager, G_TYPE_OBJECT)
 
@@ -1557,6 +1558,8 @@ gsd_color_manager_start (GsdColorManager *manager,
         g_debug ("Starting color manager");
         gnome_settings_profile_start (NULL);
 
+        gcm_session_create_resources (manager);
+
         /* coldplug the list of screens */
         priv->x11_screen = gsd_rr_screen_new (gdk_screen_get_default (), error);
         if (priv->x11_screen == NULL)
@@ -2129,30 +2132,18 @@ gcm_session_active_changed_cb (GDBusProxy      *session,
         priv->session_is_active = is_active;
 }
 
+/* Everything stop() destroys, created again by each start() so that the
+ * plugin can be switched off and on. */
 static void
-gsd_color_manager_class_init (GsdColorManagerClass *klass)
+gcm_session_create_resources (GsdColorManager *manager)
 {
-        GObjectClass   *object_class = G_OBJECT_CLASS (klass);
-
-        object_class->finalize = gsd_color_manager_finalize;
-
-        g_type_class_add_private (klass, sizeof (GsdColorManagerPrivate));
-}
-
-static void
-gsd_color_manager_init (GsdColorManager *manager)
-{
-        GsdColorManagerPrivate *priv;
-        priv = manager->priv = GSD_COLOR_MANAGER_GET_PRIVATE (manager);
+        GsdColorManagerPrivate *priv = manager->priv;
 
         /* track the active session */
         priv->session = gnome_settings_bus_get_session_proxy ();
         g_signal_connect_object (priv->session, "g-properties-changed",
                                  G_CALLBACK (gcm_session_active_changed_cb),
                                  manager, 0);
-
-        /* set the _ICC_PROFILE atoms on the root screen */
-        priv->gdk_window = gdk_screen_get_root_window (gdk_screen_get_default ());
 
         /* parsing the EDID is expensive */
         priv->edid_cache = g_hash_table_new_full (g_str_hash,
@@ -2189,6 +2180,26 @@ gsd_color_manager_init (GsdColorManager *manager)
         g_signal_connect (priv->profile_store, "removed",
                           G_CALLBACK (gcm_session_profile_store_removed_cb),
                           manager);
+}
+
+static void
+gsd_color_manager_class_init (GsdColorManagerClass *klass)
+{
+        GObjectClass   *object_class = G_OBJECT_CLASS (klass);
+
+        object_class->finalize = gsd_color_manager_finalize;
+
+        g_type_class_add_private (klass, sizeof (GsdColorManagerPrivate));
+}
+
+static void
+gsd_color_manager_init (GsdColorManager *manager)
+{
+        GsdColorManagerPrivate *priv;
+        priv = manager->priv = GSD_COLOR_MANAGER_GET_PRIVATE (manager);
+
+        /* set the _ICC_PROFILE atoms on the root screen */
+        priv->gdk_window = gdk_screen_get_root_window (gdk_screen_get_default ());
 }
 
 static void
