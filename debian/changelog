@@ -1,3 +1,10 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity5) resolute; urgency=medium
+
+  * debian/source_unity-settings-daemon.py: raw string for the regex
+    (invalid escape SyntaxWarning under Python 3.12+).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Sat, 26 Sep 2026 16:48:12 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity4) resolute; urgency=medium
 
   * idle-monitor: keep the X event filter when
