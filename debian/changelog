@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity6) resolute; urgency=medium
+
+  * idle-monitor: don't free the XSync state when a D-Bus watcher leaves.
+    Two IdleMonitor clients leaving without RemoveWatch made the daemon
+    read freed memory and then abort on a double free.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Mon, 28 Sep 2026 09:22:10 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity5) resolute; urgency=medium
 
   * debian/source_unity-settings-daemon.py: raw string for the regex
