@@ -1,3 +1,14 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity7) resolute; urgency=medium
+
+  * power: disconnect from the shared session and screensaver proxies
+    when the plugin stops. A session-manager property change after the
+    plugins were unloaded at logout or restart ran the power plugin's
+    handler on freed memory and crashed the daemon in
+    idle_is_session_inhibited(); switching the plugin off and on also
+    left its old handlers connected, doubling them.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Mon, 28 Sep 2026 23:15:46 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity6) resolute; urgency=medium
 
   * idle-monitor: don't free the XSync state when a D-Bus watcher leaves.
