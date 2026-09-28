@@ -3217,16 +3217,18 @@ gsd_power_manager_start (GsdPowerManager *manager,
         /* Set up a delay inhibitor to be informed about suspend attempts */
         inhibit_suspend (manager);
 
-        /* track the active session */
+        /* track the active session; the session and screensaver proxies are
+         * shared by every plugin and outlive this manager, so the handlers
+         * must go when the manager stops or is finalized */
         manager->priv->session = gnome_settings_bus_get_session_proxy ();
-        g_signal_connect (manager->priv->session, "g-properties-changed",
-                          G_CALLBACK (engine_session_properties_changed_cb),
-                          manager);
+        g_signal_connect_object (manager->priv->session, "g-properties-changed",
+                                 G_CALLBACK (engine_session_properties_changed_cb),
+                                 manager, 0);
 
         manager->priv->screensaver_proxy = gnome_settings_bus_get_screen_saver_proxy ();
 
-        g_signal_connect (manager->priv->screensaver_proxy, "g-signal",
-                          G_CALLBACK (screensaver_signal_cb), manager);
+        g_signal_connect_object (manager->priv->screensaver_proxy, "g-signal",
+                                 G_CALLBACK (screensaver_signal_cb), manager, 0);
 
         manager->priv->kbd_brightness_old = -1;
         manager->priv->kbd_brightness_pre_dim = -1;
@@ -3363,6 +3365,8 @@ gsd_power_manager_stop (GsdPowerManager *manager)
 
         g_signal_handlers_disconnect_by_data (manager->priv->up_client, manager);
 
+        if (manager->priv->session != NULL)
+                g_signal_handlers_disconnect_by_data (manager->priv->session, manager);
         g_clear_object (&manager->priv->session);
         g_clear_object (&manager->priv->settings);
         g_clear_object (&manager->priv->settings_screensaver);
@@ -3402,6 +3406,8 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         g_clear_pointer (&manager->priv->previous_summary, g_free);
 
         g_clear_object (&manager->priv->session_presence_proxy);
+        if (manager->priv->screensaver_proxy != NULL)
+                g_signal_handlers_disconnect_by_data (manager->priv->screensaver_proxy, manager);
         g_clear_object (&manager->priv->screensaver_proxy);
 
         play_loop_stop (&manager->priv->critical_alert_timeout_id);
