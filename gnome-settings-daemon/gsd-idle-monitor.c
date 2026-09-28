@@ -726,9 +726,6 @@ name_vanished_callback (GDBusConnection *connection,
   DBusWatch *watch = user_data;
 
   gsd_idle_monitor_remove_watch (watch->monitor, watch->watch_id);
-
-  if (xsync)
-    g_slice_free(GsdXSync, xsync);
 }
 
 static DBusWatch *
