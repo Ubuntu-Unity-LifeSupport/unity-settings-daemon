@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity9) resolute; urgency=medium
+
+  * power: answer keyboard backlight calls with an error while the
+    backlight proxy is not there yet, instead of crashing (after the
+    plugin is switched back on, it is created again asynchronously).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Tue, 29 Sep 2026 00:46:58 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity8) resolute; urgency=medium
 
   * power: answer D-Bus calls with an error while the plugin is stopped,
