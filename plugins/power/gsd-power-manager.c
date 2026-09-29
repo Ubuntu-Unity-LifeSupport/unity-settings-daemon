@@ -3516,6 +3516,15 @@ handle_method_call_keyboard (GsdPowerManager *manager,
         guint percentage;
         GError *error = NULL;
 
+        /* start() creates the proxy asynchronously, and it may have failed */
+        if (manager->priv->upower_kdb_proxy == NULL) {
+                g_dbus_method_invocation_return_error_literal (invocation,
+                                                               G_DBUS_ERROR,
+                                                               G_DBUS_ERROR_FAILED,
+                                                               "No keyboard backlight");
+                return;
+        }
+
         if (g_strcmp0 (method_name, "StepUp") == 0) {
                 g_debug ("keyboard step up");
                 now = upower_kbd_get_brightness (manager);
