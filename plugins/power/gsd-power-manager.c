@@ -145,6 +145,12 @@ struct GsdPowerManagerPrivate
         GDBusNodeInfo           *introspection_data;
         GDBusConnection         *connection;
         GCancellable            *bus_cancellable;
+        /* cancels the async calls a start() makes (proxies, logind
+         * inhibitors) when the manager stops: their replies must not reach
+         * a stopped or finalized manager */
+        GCancellable            *start_cancellable;
+        guint                    registration_ids[8];
+        guint                    n_registrations;
         GDBusProxy              *session_presence_proxy;
 
         /* Settings */
@@ -2705,10 +2711,31 @@ gsd_power_manager_finalize (GObject *object)
 
         g_return_if_fail (manager->priv != NULL);
 
-        g_clear_object (&manager->priv->connection);
+        /* The D-Bus object carries this manager as its user data and lives
+         * on the session connection, which outlives it: remove it first, so
+         * that a call dispatched later gets an error instead of freed memory */
+        if (manager->priv->connection != NULL) {
+                guint i;
+
+                for (i = 0; i < manager->priv->n_registrations; i++)
+                        g_dbus_connection_unregister_object (manager->priv->connection,
+                                                             manager->priv->registration_ids[i]);
+        }
+        manager->priv->n_registrations = 0;
 
         if (manager->priv->name_id != 0)
                 g_bus_unown_name (manager->priv->name_id);
+
+        if (manager->priv->bus_cancellable != NULL) {
+                g_cancellable_cancel (manager->priv->bus_cancellable);
+                g_clear_object (&manager->priv->bus_cancellable);
+        }
+        if (manager->priv->start_cancellable != NULL) {
+                g_cancellable_cancel (manager->priv->start_cancellable);
+                g_clear_object (&manager->priv->start_cancellable);
+        }
+
+        g_clear_object (&manager->priv->connection);
 
         G_OBJECT_CLASS (gsd_power_manager_parent_class)->finalize (object);
 }
@@ -2729,9 +2756,17 @@ session_presence_proxy_ready_cb (GObject *source_object,
                                  gpointer user_data)
 {
         GError *error = NULL;
-        GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
+        GsdPowerManager *manager;
+        GDBusProxy *proxy;
 
-        manager->priv->session_presence_proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+        proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+        /* cancelled by stop(): do not touch the manager */
+        if (proxy == NULL && g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+                g_error_free (error);
+                return;
+        }
+        manager = GSD_POWER_MANAGER (user_data);
+        manager->priv->session_presence_proxy = proxy;
         if (manager->priv->session_presence_proxy == NULL) {
                 g_warning ("Could not connect to gnome-sesson: %s",
                            error->message);
@@ -2779,9 +2814,17 @@ power_keyboard_proxy_ready_cb (GObject             *source_object,
 {
         GVariant *k_max = NULL;
         GError *error = NULL;
-        GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
+        GsdPowerManager *manager;
+        GDBusProxy *proxy;
 
-        manager->priv->upower_kdb_proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+        proxy = g_dbus_proxy_new_for_bus_finish (res, &error);
+        /* cancelled by stop(): do not touch the manager */
+        if (proxy == NULL && g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+                g_error_free (error);
+                return;
+        }
+        manager = GSD_POWER_MANAGER (user_data);
+        manager->priv->upower_kdb_proxy = proxy;
         if (manager->priv->upower_kdb_proxy == NULL) {
                 g_warning ("Could not connect to UPower: %s",
                            error->message);
@@ -2965,13 +3008,20 @@ inhibit_lid_switch_done (GObject      *source,
                          gpointer      user_data)
 {
         GDBusProxy *proxy = G_DBUS_PROXY (source);
-        GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
+        GsdPowerManager *manager;
         GError *error = NULL;
         GVariant *res;
         GUnixFDList *fd_list = NULL;
         gint idx;
 
         res = g_dbus_proxy_call_with_unix_fd_list_finish (proxy, &fd_list, result, &error);
+        /* cancelled by stop(): the manager may be stopped or gone; the
+         * reply's fd is closed with it */
+        if (res == NULL && g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+                g_error_free (error);
+                return;
+        }
+        manager = GSD_POWER_MANAGER (user_data);
         if (res == NULL) {
                 g_warning ("Unable to inhibit lid switch: %s", error->message);
                 g_error_free (error);
@@ -3011,7 +3061,7 @@ inhibit_lid_switch (GsdPowerManager *manager)
                                              0,
                                              G_MAXINT,
                                              NULL,
-                                             NULL,
+                                             manager->priv->start_cancellable,
                                              inhibit_lid_switch_done,
                                              manager);
 }
@@ -3035,13 +3085,20 @@ inhibit_suspend_done (GObject      *source,
                       gpointer      user_data)
 {
         GDBusProxy *proxy = G_DBUS_PROXY (source);
-        GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
+        GsdPowerManager *manager;
         GError *error = NULL;
         GVariant *res;
         GUnixFDList *fd_list = NULL;
         gint idx;
 
         res = g_dbus_proxy_call_with_unix_fd_list_finish (proxy, &fd_list, result, &error);
+        /* cancelled by stop(): the manager may be stopped or gone; the
+         * reply's fd is closed with it */
+        if (res == NULL && g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED)) {
+                g_error_free (error);
+                return;
+        }
+        manager = GSD_POWER_MANAGER (user_data);
         if (res == NULL) {
                 g_warning ("Unable to inhibit suspend: %s", error->message);
                 g_error_free (error);
@@ -3081,7 +3138,7 @@ inhibit_suspend (GsdPowerManager *manager)
                                              0,
                                              G_MAXINT,
                                              NULL,
-                                             NULL,
+                                             manager->priv->start_cancellable,
                                              inhibit_suspend_done,
                                              manager);
 }
@@ -3184,6 +3241,12 @@ gsd_power_manager_start (GsdPowerManager *manager,
         g_debug ("Starting power manager");
         gnome_settings_profile_start (NULL);
 
+        if (manager->priv->start_cancellable != NULL) {
+                g_cancellable_cancel (manager->priv->start_cancellable);
+                g_object_unref (manager->priv->start_cancellable);
+        }
+        manager->priv->start_cancellable = g_cancellable_new ();
+
         /* coldplug the list of screens */
         manager->priv->rr_screen = gsd_rr_screen_new (gdk_screen_get_default (), error);
         if (manager->priv->rr_screen == NULL) {
@@ -3261,7 +3324,7 @@ gsd_power_manager_start (GsdPowerManager *manager,
                                   UPOWER_DBUS_NAME,
                                   UPOWER_DBUS_PATH_KBDBACKLIGHT,
                                   UPOWER_DBUS_INTERFACE_KBDBACKLIGHT,
-                                  NULL,
+                                  manager->priv->start_cancellable,
                                   power_keyboard_proxy_ready_cb,
                                   manager);
 
@@ -3272,7 +3335,7 @@ gsd_power_manager_start (GsdPowerManager *manager,
                                   GNOME_SESSION_DBUS_NAME,
                                   GNOME_SESSION_DBUS_PATH_PRESENCE,
                                   GNOME_SESSION_DBUS_INTERFACE_PRESENCE,
-                                  NULL,
+                                  manager->priv->start_cancellable,
                                   session_presence_proxy_ready_cb,
                                   manager);
 
@@ -3358,6 +3421,12 @@ gsd_power_manager_stop (GsdPowerManager *manager)
                 manager->priv->bus_cancellable = NULL;
         }
 
+        if (manager->priv->start_cancellable != NULL) {
+                g_cancellable_cancel (manager->priv->start_cancellable);
+                g_clear_object (&manager->priv->start_cancellable);
+        }
+        g_clear_object (&manager->priv->upower_kdb_proxy);
+
         if (manager->priv->introspection_data) {
                 g_dbus_node_info_unref (manager->priv->introspection_data);
                 manager->priv->introspection_data = NULL;
@@ -3382,8 +3451,11 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         if (manager->priv->inhibit_suspend_fd != -1) {
                 close (manager->priv->inhibit_suspend_fd);
                 manager->priv->inhibit_suspend_fd = -1;
-                manager->priv->inhibit_suspend_taken = FALSE;
         }
+        /* also when a request was still pending: stop() cancelled it, and the
+         * next start() must ask again */
+        manager->priv->inhibit_lid_switch_taken = FALSE;
+        manager->priv->inhibit_suspend_taken = FALSE;
 
         g_clear_object (&manager->priv->logind_proxy);
 
@@ -3657,8 +3729,12 @@ handle_method_call (GDBusConnection       *connection,
         GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
 
         /* Check session pointer as a proxy for whether the manager is in the
-           start or stop state */
+           start or stop state; answer, or the caller waits for its timeout */
         if (manager->priv->session == NULL) {
+                g_dbus_method_invocation_return_error_literal (invocation,
+                                                               G_DBUS_ERROR,
+                                                               G_DBUS_ERROR_FAILED,
+                                                               "The power plugin is not running");
                 return;
         }
 
@@ -3697,8 +3773,11 @@ handle_get_property (GDBusConnection *connection,
         GVariant *retval = NULL;
 
         /* Check session pointer as a proxy for whether the manager is in the
-           start or stop state */
+           start or stop state. A NULL return must come with an error: GDBus
+           aborts the daemon otherwise. */
         if (manager->priv->session == NULL) {
+                g_set_error_literal (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                     "The power plugin is not running");
                 return NULL;
         }
 
@@ -3712,6 +3791,10 @@ handle_get_property (GDBusConnection *connection,
                 if (percentage >= 0)
                         retval = g_variant_new_double (percentage);
         }
+
+        if (retval == NULL)
+                g_set_error (error, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                             "Property %s is not available", property_name);
 
         return retval;
 }
@@ -3744,14 +3827,19 @@ on_bus_gotten (GObject             *source_object,
         manager->priv->connection = connection;
 
         infos = manager->priv->introspection_data->interfaces;
-        for (i = 0; infos[i] != NULL; i++) {
-                g_dbus_connection_register_object (connection,
-                                                   GSD_POWER_DBUS_PATH,
-                                                   infos[i],
-                                                   &interface_vtable,
-                                                   manager,
-                                                   NULL,
-                                                   NULL);
+        for (i = 0; infos[i] != NULL &&
+                    manager->priv->n_registrations < G_N_ELEMENTS (manager->priv->registration_ids); i++) {
+                guint id;
+
+                id = g_dbus_connection_register_object (connection,
+                                                        GSD_POWER_DBUS_PATH,
+                                                        infos[i],
+                                                        &interface_vtable,
+                                                        manager,
+                                                        NULL,
+                                                        NULL);
+                if (id != 0)
+                        manager->priv->registration_ids[manager->priv->n_registrations++] = id;
         }
 
         manager->priv->name_id = g_bus_own_name_on_connection (connection,
