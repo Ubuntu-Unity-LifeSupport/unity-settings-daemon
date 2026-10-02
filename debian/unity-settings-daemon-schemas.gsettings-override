@@ -1,0 +1,9 @@
+# UNITY-20261002-003 / UNITY-20260927-053: the idle policy of the power
+# plugin becomes reachable once the session manager exports SessionIsActive
+# (cinnamon-session +unity4). Ubuntu disables the AC sleep timeout for
+# gnome-settings-daemon (10_ubuntu-settings: org.gnome.settings-daemon
+# sleep-inactive-ac-timeout=0); the same for the Unity schema, so that a
+# desktop on mains power does not suspend after 20 minutes of idle time.
+# Battery timeouts and idle dimming keep the schema defaults.
+[com.canonical.unity.settings-daemon.plugins.power]
+sleep-inactive-ac-timeout=0

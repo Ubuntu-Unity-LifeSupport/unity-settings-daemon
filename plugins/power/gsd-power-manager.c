@@ -215,6 +215,7 @@ struct GsdPowerManagerPrivate
         guint                    idle_blank_id;
         guint                    idle_sleep_warning_id;
         guint                    idle_sleep_id;
+        guint                    idle_user_active_id;
         GsdPowerIdleMode         current_idle_mode;
 
         guint                    temporary_unidle_on_ac_id;
@@ -2349,12 +2350,16 @@ idle_set_mode (GsdPowerManager *manager, GsdPowerIdleMode mode)
         g_debug ("Doing a state transition: %s", idle_mode_to_string (mode));
 
         /* if we're moving to an idle mode, make sure
-         * we add a watch to take us back to normal */
-        if (mode != GSD_POWER_IDLE_MODE_NORMAL) {
-                gsd_idle_monitor_add_user_active_watch (manager->priv->idle_monitor,
-                                                        idle_became_active_cb,
-                                                        manager,
-                                                        NULL);
+         * we add a watch to take us back to normal (one: the id is kept
+         * so that stop() can remove it, and a DIM -> BLANK -> SLEEP walk
+         * does not add a second one) */
+        if (mode != GSD_POWER_IDLE_MODE_NORMAL &&
+            manager->priv->idle_user_active_id == 0) {
+                manager->priv->idle_user_active_id =
+                        gsd_idle_monitor_add_user_active_watch (manager->priv->idle_monitor,
+                                                                idle_became_active_cb,
+                                                                manager,
+                                                                NULL);
         }
 
         /* save current brightness, and set dim level */
@@ -2486,6 +2491,36 @@ clear_idle_watch (GsdIdleMonitor *monitor,
                 return;
         gsd_idle_monitor_remove_watch (monitor, *id);
         *id = 0;
+}
+
+/* Everything the idle handling registered with this manager as its data:
+ * the watches on the core idle monitor, the temporary-unidle timer and
+ * the sleep-warning notification. Called from stop() and from finalize();
+ * after stop() priv->idle_monitor is NULL, the core monitor is used. */
+static void
+idle_watches_remove (GsdPowerManager *manager)
+{
+        GsdIdleMonitor *monitor;
+
+        monitor = manager->priv->idle_monitor;
+        if (monitor == NULL)
+                monitor = gsd_idle_monitor_get_core ();
+
+        clear_idle_watch (monitor, &manager->priv->idle_dim_id);
+        clear_idle_watch (monitor, &manager->priv->idle_blank_id);
+        clear_idle_watch (monitor, &manager->priv->idle_sleep_warning_id);
+        clear_idle_watch (monitor, &manager->priv->idle_sleep_id);
+        clear_idle_watch (monitor, &manager->priv->idle_user_active_id);
+
+        if (manager->priv->temporary_unidle_on_ac_id != 0) {
+                g_source_remove (manager->priv->temporary_unidle_on_ac_id);
+                manager->priv->temporary_unidle_on_ac_id = 0;
+        }
+        notify_close_if_showing (&manager->priv->notification_sleep_warning);
+
+        manager->priv->current_idle_mode = GSD_POWER_IDLE_MODE_NORMAL;
+        manager->priv->previous_idle_mode = GSD_POWER_IDLE_MODE_NORMAL;
+        manager->priv->screensaver_active = FALSE;
 }
 
 static void
@@ -2710,6 +2745,10 @@ gsd_power_manager_finalize (GObject *object)
         manager = GSD_POWER_MANAGER (object);
 
         g_return_if_fail (manager->priv != NULL);
+
+        /* stop() is not called from here (it comes from the plugin's
+         * deactivate); the idle watches must not outlive the manager either */
+        idle_watches_remove (manager);
 
         /* The D-Bus object carries this manager as its user data and lives
          * on the session connection, which outlives it: remove it first, so
@@ -2943,6 +2982,9 @@ idle_became_active_cb (GsdIdleMonitor *monitor,
         GsdPowerManager *manager = GSD_POWER_MANAGER (user_data);
 
         g_debug ("idletime reset");
+
+        /* the monitor removes a fired user-active watch itself */
+        manager->priv->idle_user_active_id = 0;
 
         set_temporary_unidle_on_ac (manager, FALSE);
 
@@ -3482,6 +3524,15 @@ gsd_power_manager_stop (GsdPowerManager *manager)
         g_clear_object (&manager->priv->screensaver_proxy);
 
         play_loop_stop (&manager->priv->critical_alert_timeout_id);
+
+        /* The idle watches live on the process-wide core idle monitor with
+         * this manager as their data; the monitor outlives the manager, so
+         * they must end here, before the reference is dropped (the same
+         * sequence idle_configure runs on an inactive session), with the
+         * timer and the notification that would otherwise reach a stopped
+         * manager. The modes are reset directly: idle_set_mode() returns
+         * early when the session is inactive or on a virtual machine. */
+        idle_watches_remove (manager);
 
         g_clear_object (&manager->priv->idle_monitor);
 
