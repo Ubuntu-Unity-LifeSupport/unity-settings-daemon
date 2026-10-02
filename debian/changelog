@@ -1,3 +1,15 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity10) resolute; urgency=medium
+
+  * power: keep the bus request and the D-Bus registration across stop().
+    A stop of the plugin before the session-bus result arrived (at session
+    start that is 4-6 s after the request) cancelled the registration for
+    the life of the process: no org.gnome.SettingsDaemon.Power, no
+    brightness keys, no battery level for the indicator, until the daemon
+    was restarted. The registration now lives with the manager object and
+    ends in finalize. Present since the 2014 import (archive 0ubuntu6).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Fri, 02 Oct 2026 16:59:03 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity9) resolute; urgency=medium
 
   * power: answer keyboard backlight calls with an error while the
