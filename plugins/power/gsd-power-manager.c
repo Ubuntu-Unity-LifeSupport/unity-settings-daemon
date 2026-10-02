@@ -2734,6 +2734,7 @@ gsd_power_manager_finalize (GObject *object)
                 g_cancellable_cancel (manager->priv->start_cancellable);
                 g_clear_object (&manager->priv->start_cancellable);
         }
+        g_clear_pointer (&manager->priv->introspection_data, g_dbus_node_info_unref);
 
         g_clear_object (&manager->priv->connection);
 
@@ -3415,22 +3416,20 @@ gsd_power_manager_stop (GsdPowerManager *manager)
                 manager->priv->inhibit_lid_switch_timer_id = 0;
         }
 
-        if (manager->priv->bus_cancellable != NULL) {
-                g_cancellable_cancel (manager->priv->bus_cancellable);
-                g_object_unref (manager->priv->bus_cancellable);
-                manager->priv->bus_cancellable = NULL;
-        }
+        /* The D-Bus object and name are registered once per manager
+         * (register_manager_dbus, from gsd_power_manager_new) and end
+         * with it in finalize. The bus request must survive a stop()
+         * that runs before its result is delivered: at session start
+         * that is seconds after the request, because every plugin's
+         * start() runs before the main loop resumes. A cancel here left
+         * the plugin without its object and name until the daemon was
+         * restarted. While stopped, the handlers answer "not running". */
 
         if (manager->priv->start_cancellable != NULL) {
                 g_cancellable_cancel (manager->priv->start_cancellable);
                 g_clear_object (&manager->priv->start_cancellable);
         }
         g_clear_object (&manager->priv->upower_kdb_proxy);
-
-        if (manager->priv->introspection_data) {
-                g_dbus_node_info_unref (manager->priv->introspection_data);
-                manager->priv->introspection_data = NULL;
-        }
 
         g_signal_handlers_disconnect_by_data (manager->priv->up_client, manager);
 
