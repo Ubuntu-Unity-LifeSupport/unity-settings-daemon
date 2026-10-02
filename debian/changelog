@@ -1,3 +1,20 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity11) resolute; urgency=medium
+
+  * power: the idle watches, the user-active watch, the temporary-unidle
+    timer and the sleep-warning notification end in stop() (and with the
+    manager); the user-active watch keeps its id and is added once. The
+    watches live on the process-wide idle monitor with the manager as their
+    data and fired into a stopped manager after the plugin was switched off.
+    Unreachable under cinnamon-session until it exports SessionIsActive
+    (cinnamon-session +unity4), which is why it is fixed first.
+  * Install a gsettings override for the Unity power schema:
+    sleep-inactive-ac-timeout=0, as Ubuntu does for gnome-settings-daemon,
+    so that a desktop on mains power does not suspend after 20 minutes of
+    idle time once the idle policy runs. Battery timeouts and idle dimming
+    keep their defaults; the screen blanks when the lock screen appears.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Fri, 02 Oct 2026 22:13:06 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity10) resolute; urgency=medium
 
   * power: keep the bus request and the D-Bus registration across stop().
