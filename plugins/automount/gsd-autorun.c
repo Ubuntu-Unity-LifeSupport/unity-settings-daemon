@@ -815,6 +815,7 @@ out:
 
 typedef struct {
 	GMount *mount;
+	GsdAutorunAllowed allowed_func;
 	GsdAutorunOpenWindow open_window_func;
 	gpointer user_data;
 	GSettings *settings;
@@ -838,6 +839,16 @@ autorun_guessed_content_type_callback (GObject *source_object,
 				"gsd-content-type-cache",
 				g_strdupv (guessed_content_type),
 				(GDestroyNotify)g_strfreev);
+
+	if (data->allowed_func != NULL && !data->allowed_func (data->user_data)) {
+		/* the session was locked or left while the content type
+		 * was guessed: launch nothing, show nothing */
+		g_debug ("Autorun refused: the session is not active and unlocked");
+		g_clear_error (&error);
+		g_strfreev (guessed_content_type);
+		goto out;
+	}
+
 	if (error != NULL) {
 		g_warning ("Unable to guess content type for mount: %s", error->message);
 		g_error_free (error);
@@ -863,6 +874,7 @@ autorun_guessed_content_type_callback (GObject *source_object,
 		data->open_window_func (data->mount, data->user_data);
 	}
 
+out:
 	g_object_unref (data->mount);
 	g_object_unref (data->settings);
 	g_free (data);
@@ -871,10 +883,14 @@ autorun_guessed_content_type_callback (GObject *source_object,
 void
 gsd_autorun (GMount *mount,
              GSettings *settings,
+             GsdAutorunAllowed allowed_func,
              GsdAutorunOpenWindow open_window_func,
              gpointer user_data)
 {
 	AutorunData *data;
+
+	if (allowed_func != NULL && !allowed_func (user_data))
+		return;
 
 	if (!should_autorun_mount (mount) ||
 	    g_settings_get_boolean (settings, "autorun-never")) {
@@ -883,6 +899,7 @@ gsd_autorun (GMount *mount,
 
 	data = g_new0 (AutorunData, 1);
 	data->mount = g_object_ref (mount);
+	data->allowed_func = allowed_func;
 	data->open_window_func = open_window_func;
 	data->user_data = user_data;
 	data->settings = g_object_ref (settings);
@@ -907,6 +924,12 @@ void
 gsd_allow_autorun_for_volume (GVolume *volume)
 {
 	g_object_set_data (G_OBJECT (volume), "gsd-allow-autorun", GINT_TO_POINTER (1));
+}
+
+void
+gsd_disallow_autorun_for_volume (GVolume *volume)
+{
+	g_object_set_data (G_OBJECT (volume), "gsd-allow-autorun", NULL);
 }
 
 #define INHIBIT_AUTORUN_SECONDS 10

@@ -136,6 +136,18 @@ lock_state_allows_mount (GsdAutomountManager *manager)
         return TRUE;
 }
 
+/* Whether autorun may act for a medium now: the session is the active one
+ * and known to be unlocked. Asked when a mount appears and again right
+ * before autorun launches or shows anything. */
+static gboolean
+autorun_allowed (gpointer user_data)
+{
+        GsdAutomountManager *manager = user_data;
+
+        return manager->priv->session_is_active &&
+               lock_state_allows_mount (manager);
+}
+
 static void
 automount_all_volumes (GsdAutomountManager *manager)
 {
@@ -318,10 +330,11 @@ volume_added_callback (GVolumeMonitor *monitor,
 	    g_volume_should_automount (volume) &&
 	    g_volume_can_mount (volume)) {
                 check_screen_lock_and_mount (manager, volume);
-	} else {
+	} else if (autorun_allowed (manager)) {
 		/* Allow gsd_autorun() to run. When the mount is later
 		 * added programmatically (i.e. for a blank CD),
-		 * gsd_autorun() will be called by mount_added_callback(). */
+		 * gsd_autorun() will be called by mount_added_callback().
+		 * Not while the session is locked or inactive. */
 		gsd_allow_autorun_for_volume (volume);
 		gsd_allow_autorun_for_volume_finish (volume);
 	}
@@ -360,12 +373,20 @@ mount_added_callback (GVolumeMonitor *monitor,
 		      GMount *mount,
 		      GsdAutomountManager *manager)
 {
-        /* don't autorun if the session is not active */
-        if (!manager->priv->session_is_active) {
+        /* don't autorun unless the session is active and unlocked; a
+         * permission given to the volume earlier is dropped */
+        if (!autorun_allowed (manager)) {
+                GVolume *volume = g_mount_get_volume (mount);
+
+                if (volume != NULL) {
+                        gsd_disallow_autorun_for_volume (volume);
+                        g_object_unref (volume);
+                }
                 return;
         }
 
-	gsd_autorun (mount, manager->priv->settings, autorun_show_window, manager);
+	gsd_autorun (mount, manager->priv->settings, autorun_allowed,
+		     autorun_show_window, manager);
 }
 
 

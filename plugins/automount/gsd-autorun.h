@@ -42,12 +42,18 @@
 typedef void (*GsdAutorunOpenWindow) (GMount *mount,
 				      gpointer user_data);
 
+/* Whether autorun may act now; asked again when the content type of the
+ * mount is known, right before anything is launched or shown. */
+typedef gboolean (*GsdAutorunAllowed) (gpointer user_data);
+
 void gsd_autorun (GMount *mount,
 		  GSettings *settings,
+		  GsdAutorunAllowed allowed_func,
 		  GsdAutorunOpenWindow open_window_func,
 		  gpointer user_data);
 
 void gsd_allow_autorun_for_volume (GVolume *volume);
 void gsd_allow_autorun_for_volume_finish (GVolume *volume);
+void gsd_disallow_autorun_for_volume (GVolume *volume);
 
 #endif /* __GSD_AUTORUN_H__ */
