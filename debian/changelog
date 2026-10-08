@@ -1,3 +1,18 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity13) resolute; urgency=medium
+
+  * automount: offer autorun for a medium only when the session is active
+    and known to be unlocked, the same condition as for mounting. It is
+    checked when the mount appears and again right before autorun opens a
+    folder, shows its dialog or starts an application. A medium mounted
+    from the queue once the session is unlocked is offered as before.
+  * automount: keep one proxy and one source of answers per screen locker
+    name; a locker that leaves and comes back no longer leaves an extra
+    proxy and signal handler behind, and a late answer from a previous
+    owner is ignored.
+  * automount: add tests for the lock and autorun gates (make check).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Thu, 08 Oct 2026 23:13:38 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity12) resolute; urgency=medium
 
   * automount: mount a volume only when the session is known to be
