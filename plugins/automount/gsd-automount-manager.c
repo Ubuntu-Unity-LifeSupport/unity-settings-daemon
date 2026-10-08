@@ -50,6 +50,11 @@ struct GsdAutomountManagerPrivate
         guint us_watch_id;
         GDBusProxy *ss_proxy;
         GDBusProxy *us_proxy;
+        /* one per lock provider name, renewed on every appearance and
+         * cancelled when it vanishes: replies meant for an earlier owner
+         * are dropped */
+        GCancellable *ss_cancellable;
+        GCancellable *us_cancellable;
 
         /* The lock state is only trusted once it is known: a present
          * ScreenSaver or Unity owner must have answered, and logind's
@@ -455,6 +460,69 @@ do_initialize_session (GsdAutomountManager *manager)
 
 #define SCREENSAVER_NAME "org.gnome.ScreenSaver"
 
+/* An asynchronous call to a lock provider. The callback checks the
+ * provider's cancellable it was started with, not GTask's own check: a
+ * cancelled call, or one whose provider vanished or appeared again since,
+ * returns without touching the manager. */
+typedef struct {
+        GsdAutomountManager *manager;
+        GCancellable        *cancellable;
+} ProviderCall;
+
+static ProviderCall *
+provider_call_new (GsdAutomountManager *manager,
+                   GCancellable        *cancellable)
+{
+        ProviderCall *call = g_new0 (ProviderCall, 1);
+
+        call->manager = manager;
+        call->cancellable = g_object_ref (cancellable);
+        return call;
+}
+
+/* Frees the call; returns the manager, or NULL if the call was superseded. */
+static GsdAutomountManager *
+provider_call_finish (ProviderCall *call)
+{
+        GsdAutomountManager *manager = NULL;
+
+        if (!g_cancellable_is_cancelled (call->cancellable))
+                manager = call->manager;
+        g_object_unref (call->cancellable);
+        g_free (call);
+        return manager;
+}
+
+static GCancellable *
+renew_cancellable (GCancellable **cancellable)
+{
+        if (*cancellable != NULL) {
+                g_cancellable_cancel (*cancellable);
+                g_object_unref (*cancellable);
+        }
+        *cancellable = g_cancellable_new ();
+        return *cancellable;
+}
+
+static void
+drop_cancellable (GCancellable **cancellable)
+{
+        if (*cancellable != NULL) {
+                g_cancellable_cancel (*cancellable);
+                g_clear_object (cancellable);
+        }
+}
+
+static void
+clear_provider_proxy (GsdAutomountManager *manager,
+                      GDBusProxy         **proxy)
+{
+        if (*proxy != NULL) {
+                g_signal_handlers_disconnect_by_data (*proxy, manager);
+                g_clear_object (proxy);
+        }
+}
+
 static void
 screensaver_signal_callback (GDBusProxy *proxy,
                              const gchar *sender_name,
@@ -486,6 +554,15 @@ screensaver_get_active_ready_cb (GObject *source,
                                            res,
                                            &error);
 
+        manager = provider_call_finish (user_data);
+        if (manager == NULL) {
+                /* meant for an earlier owner, or stopped */
+                g_clear_error (&error);
+                if (result != NULL)
+                        g_variant_unref (result);
+                return;
+        }
+
         if (error != NULL) {
                 /* the state stays unknown: volumes stay queued */
                 if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -495,8 +572,6 @@ screensaver_get_active_ready_cb (GObject *source,
 
                 return;
         }
-
-        manager = user_data;
 
         g_variant_get (result, "(b)", &manager->priv->screensaver_active);
         g_variant_unref (result);
@@ -519,6 +594,8 @@ screensaver_appeared_callback (GDBusConnection *connection,
         manager->priv->ss_resolved = TRUE;
         manager->priv->ss_present = TRUE;
         manager->priv->ss_known = FALSE;
+        renew_cancellable (&manager->priv->ss_cancellable);
+        clear_provider_proxy (manager, &manager->priv->ss_proxy);
         manager->priv->ss_proxy = G_DBUS_PROXY (gnome_settings_bus_get_screen_saver_proxy ());
 
         if (manager->priv->ss_proxy == NULL) {
@@ -535,9 +612,9 @@ screensaver_appeared_callback (GDBusConnection *connection,
                            NULL,
                            G_DBUS_CALL_FLAGS_NO_AUTO_START,
                            -1,
-                           manager->priv->cancellable,
+                           manager->priv->ss_cancellable,
                            screensaver_get_active_ready_cb,
-                           manager);
+                           provider_call_new (manager, manager->priv->ss_cancellable));
 }
 
 static void
@@ -553,7 +630,8 @@ screensaver_vanished_callback (GDBusConnection *connection,
         manager->priv->ss_present = FALSE;
         manager->priv->ss_known = FALSE;
         manager->priv->screensaver_active = FALSE;
-        g_clear_object (&manager->priv->ss_proxy);
+        drop_cancellable (&manager->priv->ss_cancellable);
+        clear_provider_proxy (manager, &manager->priv->ss_proxy);
 
         if (!manager->priv->ss_proxy && !manager->priv->us_proxy) {
                 /* in this case force a clear of the volume queue, without
@@ -619,6 +697,15 @@ unity_session_is_locked_cb (GObject *source,
                                            res,
                                            &error);
 
+        manager = provider_call_finish (user_data);
+        if (manager == NULL) {
+                /* meant for an earlier owner, or stopped */
+                g_clear_error (&error);
+                if (result != NULL)
+                        g_variant_unref (result);
+                return;
+        }
+
         if (error != NULL) {
                 /* the state stays unknown: volumes stay queued */
                 if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -628,8 +715,6 @@ unity_session_is_locked_cb (GObject *source,
 
                 return;
         }
-
-        manager = user_data;
 
         g_variant_get (result, "(b)", &manager->priv->lockscreen_active);
         g_variant_unref (result);
@@ -650,6 +735,14 @@ unity_session_proxy_ready_cb (GObject *source,
 
         us_proxy = g_dbus_proxy_new_finish (res, &error);
 
+        manager = provider_call_finish (user_data);
+        if (manager == NULL) {
+                /* meant for an earlier owner, or stopped */
+                g_clear_error (&error);
+                g_clear_object (&us_proxy);
+                return;
+        }
+
         if (error != NULL) {
                 /* the Unity state stays unknown while the name is present */
                 if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -660,10 +753,9 @@ unity_session_proxy_ready_cb (GObject *source,
                 return;
         }
 
-        manager = user_data;
-
         g_debug ("Unity Session proxy ready");
 
+        clear_provider_proxy (manager, &manager->priv->us_proxy);
         manager->priv->us_proxy = us_proxy;
 
         g_signal_connect (us_proxy, "g-signal",
@@ -674,9 +766,9 @@ unity_session_proxy_ready_cb (GObject *source,
                            NULL,
                            G_DBUS_CALL_FLAGS_NO_AUTO_START,
                            -1,
-                           manager->priv->cancellable,
+                           manager->priv->us_cancellable,
                            unity_session_is_locked_cb,
-                           manager);
+                           provider_call_new (manager, manager->priv->us_cancellable));
 }
 
 static void
@@ -693,6 +785,8 @@ unity_appeared_callback (GDBusConnection *connection,
         manager->priv->us_present = TRUE;
         manager->priv->us_known = FALSE;
         manager->priv->lockscreen_active = FALSE;
+        renew_cancellable (&manager->priv->us_cancellable);
+        clear_provider_proxy (manager, &manager->priv->us_proxy);
 
         g_dbus_proxy_new (connection,
                           G_DBUS_PROXY_FLAGS_DO_NOT_AUTO_START,
@@ -700,9 +794,9 @@ unity_appeared_callback (GDBusConnection *connection,
                           name,
                           UNITY_SESSION_PATH,
                           UNITY_SESSION_INTERFACE,
-                          manager->priv->cancellable,
+                          manager->priv->us_cancellable,
                           unity_session_proxy_ready_cb,
-                          manager);
+                          provider_call_new (manager, manager->priv->us_cancellable));
 }
 
 static void
@@ -718,7 +812,8 @@ unity_vanished_callback (GDBusConnection *connection,
         manager->priv->us_present = FALSE;
         manager->priv->us_known = FALSE;
         manager->priv->lockscreen_active = FALSE;
-        g_clear_object (&manager->priv->us_proxy);
+        drop_cancellable (&manager->priv->us_cancellable);
+        clear_provider_proxy (manager, &manager->priv->us_proxy);
 
         if (!manager->priv->ss_proxy && !manager->priv->us_proxy) {
                 /* in this case force a clear of the volume queue, without
@@ -1013,6 +1108,8 @@ gsd_automount_manager_stop (GsdAutomountManager *manager)
                 g_cancellable_cancel (p->cancellable);
                 g_clear_object (&p->cancellable);
         }
+        drop_cancellable (&p->ss_cancellable);
+        drop_cancellable (&p->us_cancellable);
         g_clear_object (&p->login_session);
         p->locked_hint_known = FALSE;
         p->ss_resolved = p->us_resolved = FALSE;
