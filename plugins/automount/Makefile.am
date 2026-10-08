@@ -21,6 +21,32 @@ unity_fallback_mount_helper_LDADD =	\
 	$(AUTOMOUNT_LIBS)		\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la
 
+check_PROGRAMS = test-automount test-autorun
+
+test_automount_SOURCES = \
+	test-automount.c \
+	gsd-automount-manager.h \
+	gsd-autorun.h
+
+test_automount_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
+test_automount_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
+test_automount_LDADD = $(unity_fallback_mount_helper_LDADD)
+
+test_autorun_SOURCES = \
+	test-autorun.c \
+	gsd-autorun.c \
+	gsd-autorun.h
+
+test_autorun_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
+test_autorun_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
+test_autorun_LDADD = $(unity_fallback_mount_helper_LDADD)
+
+AM_TESTS_ENVIRONMENT = \
+	GSETTINGS_BACKEND=memory; export GSETTINGS_BACKEND; \
+	G_DEBUG=gc-friendly; export G_DEBUG;
+
+TESTS = $(check_PROGRAMS)
+
 autostartdir = $(sysconfdir)/xdg/autostart
 autostart_in_files = unity-fallback-mount-helper.desktop.in
 autostart_in_in_files = unity-fallback-mount-helper.desktop.in.in
