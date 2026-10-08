@@ -1,3 +1,19 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity12) resolute; urgency=medium
+
+  * automount: mount a volume only when the session is known to be
+    unlocked. The helper used to start from "unlocked" and keep its last
+    answer when a call to the screen locker failed, so an unknown state
+    counted as unlocked. It now also reads logind's LockedHint for its
+    session (found through XDG_SESSION_ID or the user's display session),
+    requires every present lock provider to have answered, and queues the
+    volume while anything is unknown. Volumes present at login go through
+    the same check and mount, without autorun as before, once the session
+    is known to be unlocked.
+  * automount: fix a use-after-free when the volume queue is drained, and
+    drop the queue's reference when a queued volume is removed.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Thu, 08 Oct 2026 08:32:31 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity11) resolute; urgency=medium
 
   * power: the idle watches, the user-active watch, the temporary-unidle
