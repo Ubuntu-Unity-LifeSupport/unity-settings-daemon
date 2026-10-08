@@ -55,6 +55,8 @@ struct GsdAutomountManagerPrivate
          * ScreenSaver or Unity owner must have answered, and logind's
          * LockedHint for our session must have been read. Until then,
          * and whenever a read fails, volumes are queued (fail closed). */
+        gboolean ss_resolved;   /* the name watcher has reported once */
+        gboolean us_resolved;
         gboolean ss_present;
         gboolean us_present;
         gboolean ss_known;
@@ -120,6 +122,9 @@ lock_state_allows_mount (GsdAutomountManager *manager)
         GsdAutomountManagerPrivate *p = manager->priv;
 
         if (!p->locked_hint_known || p->locked_hint)
+                return FALSE;
+        /* until a name watcher has reported, presence itself is unknown */
+        if (!p->ss_resolved || !p->us_resolved)
                 return FALSE;
         /* presence follows the bus name, not the proxy: an owner whose
          * proxy could not be made has not answered, so it is unknown */
@@ -452,23 +457,25 @@ screensaver_get_active_ready_cb (GObject *source,
                                  GAsyncResult *res,
                                  gpointer user_data)
 {
-        GsdAutomountManager *manager = user_data;
-        GDBusProxy *proxy = manager->priv->ss_proxy;
+        GsdAutomountManager *manager;
         GVariant *result;
         GError *error = NULL;
 
-        result = g_dbus_proxy_call_finish (proxy,
+        result = g_dbus_proxy_call_finish (G_DBUS_PROXY (source),
                                            res,
                                            &error);
 
         if (error != NULL) {
                 /* the state stays unknown: volumes stay queued */
-                g_warning ("Can't call GetActive() on the ScreenSaver object: %s",
-                           error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Can't call GetActive() on the ScreenSaver object: %s",
+                                   error->message);
                 g_error_free (error);
 
                 return;
         }
+
+        manager = user_data;
 
         g_variant_get (result, "(b)", &manager->priv->screensaver_active);
         g_variant_unref (result);
@@ -488,6 +495,7 @@ screensaver_appeared_callback (GDBusConnection *connection,
 
         g_debug ("ScreenSaver name appeared");
 
+        manager->priv->ss_resolved = TRUE;
         manager->priv->ss_present = TRUE;
         manager->priv->ss_known = FALSE;
         manager->priv->ss_proxy = G_DBUS_PROXY (gnome_settings_bus_get_screen_saver_proxy ());
@@ -506,7 +514,7 @@ screensaver_appeared_callback (GDBusConnection *connection,
                            NULL,
                            G_DBUS_CALL_FLAGS_NO_AUTO_START,
                            -1,
-                           NULL,
+                           manager->priv->cancellable,
                            screensaver_get_active_ready_cb,
                            manager);
 }
@@ -520,6 +528,7 @@ screensaver_vanished_callback (GDBusConnection *connection,
 
         g_debug ("ScreenSaver name vanished");
 
+        manager->priv->ss_resolved = TRUE;
         manager->priv->ss_present = FALSE;
         manager->priv->ss_known = FALSE;
         manager->priv->screensaver_active = FALSE;
@@ -531,6 +540,8 @@ screensaver_vanished_callback (GDBusConnection *connection,
                  */
                 clear_volume_queue (manager);
         }
+        /* the start-up queue is kept; it mounts once the state is known */
+        check_volume_queue (manager);
 }
 
 static void
@@ -579,23 +590,25 @@ unity_session_is_locked_cb (GObject *source,
                             GAsyncResult *res,
                             gpointer user_data)
 {
-        GsdAutomountManager *manager = user_data;
-        GDBusProxy *proxy = manager->priv->us_proxy;
+        GsdAutomountManager *manager;
         GVariant *result;
         GError *error = NULL;
 
-        result = g_dbus_proxy_call_finish (proxy,
+        result = g_dbus_proxy_call_finish (G_DBUS_PROXY (source),
                                            res,
                                            &error);
 
         if (error != NULL) {
                 /* the state stays unknown: volumes stay queued */
-                g_warning ("Can't call IsLocked() on the Unity.Session object: %s",
-                           error->message);
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Can't call IsLocked() on the Unity.Session object: %s",
+                                   error->message);
                 g_error_free (error);
 
                 return;
         }
+
+        manager = user_data;
 
         g_variant_get (result, "(b)", &manager->priv->lockscreen_active);
         g_variant_unref (result);
@@ -610,19 +623,23 @@ unity_session_proxy_ready_cb (GObject *source,
                               GAsyncResult *res,
                               gpointer user_data)
 {
-        GsdAutomountManager *manager = user_data;
+        GsdAutomountManager *manager;
         GError *error = NULL;
         GDBusProxy *us_proxy;
 
         us_proxy = g_dbus_proxy_new_finish (res, &error);
 
         if (error != NULL) {
-                g_warning ("Can't get proxy for the Unity Session object: %s",
-                           error->message);
+                /* the Unity state stays unknown while the name is present */
+                if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+                        g_warning ("Can't get proxy for the Unity Session object: %s",
+                                   error->message);
                 g_error_free (error);
 
                 return;
         }
+
+        manager = user_data;
 
         g_debug ("Unity Session proxy ready");
 
@@ -636,7 +653,7 @@ unity_session_proxy_ready_cb (GObject *source,
                            NULL,
                            G_DBUS_CALL_FLAGS_NO_AUTO_START,
                            -1,
-                           NULL,
+                           manager->priv->cancellable,
                            unity_session_is_locked_cb,
                            manager);
 }
@@ -651,6 +668,7 @@ unity_appeared_callback (GDBusConnection *connection,
 
         g_debug ("Unity name appeared");
 
+        manager->priv->us_resolved = TRUE;
         manager->priv->us_present = TRUE;
         manager->priv->us_known = FALSE;
         manager->priv->lockscreen_active = FALSE;
@@ -661,7 +679,7 @@ unity_appeared_callback (GDBusConnection *connection,
                           name,
                           UNITY_SESSION_PATH,
                           UNITY_SESSION_INTERFACE,
-                          NULL,
+                          manager->priv->cancellable,
                           unity_session_proxy_ready_cb,
                           manager);
 }
@@ -675,6 +693,7 @@ unity_vanished_callback (GDBusConnection *connection,
 
         g_debug ("Unity name vanished");
 
+        manager->priv->us_resolved = TRUE;
         manager->priv->us_present = FALSE;
         manager->priv->us_known = FALSE;
         manager->priv->lockscreen_active = FALSE;
@@ -686,6 +705,8 @@ unity_vanished_callback (GDBusConnection *connection,
                  */
                 clear_volume_queue (manager);
         }
+        /* the start-up queue is kept; it mounts once the state is known */
+        check_volume_queue (manager);
 }
 
 static void
@@ -973,6 +994,7 @@ gsd_automount_manager_stop (GsdAutomountManager *manager)
         }
         g_clear_object (&p->login_session);
         p->locked_hint_known = FALSE;
+        p->ss_resolved = p->us_resolved = FALSE;
         p->ss_present = p->us_present = FALSE;
         p->ss_known = p->us_known = FALSE;
 
