@@ -332,10 +332,22 @@ test_autorun_dialog_closed (void)
 #define RESPONSE_EJECT 0
 
 typedef struct {
+        guint probes;
         guint replies;
         guint aborted;
         GMountOperationResult last_result;
 } OpWatch;
+
+/* Stands for GtkMountOperation's question dialog: runs after the guard's
+ * handler and keeps the class handler (which needs a session bus for its
+ * portal lookup) from running. That GTK closes its dialog on "aborted"
+ * is checked by review (gtkmountoperation.c). */
+static void
+watch_question (GMountOperation *op, const char *message, const char **choices, OpWatch *w)
+{
+        w->probes++;
+        g_signal_stop_emission_by_name (op, "ask-question");
+}
 
 static void
 watch_reply (GMountOperation *op, GMountOperationResult result, OpWatch *w)
@@ -417,11 +429,13 @@ test_autorun_unmount_prompt_withdrawn (void)
         g_settings_set_boolean (settings, "autorun-never", FALSE);
         before = count_visible_dialogs ();
         mount = start_dialog_unmount (settings, &recorder);
+        g_signal_connect (mount->unmount_op, "ask-question", G_CALLBACK (watch_question), &w);
         g_signal_connect (mount->unmount_op, "reply", G_CALLBACK (watch_reply), &w);
         g_signal_connect (mount->unmount_op, "aborted", G_CALLBACK (watch_aborted), &w);
 
         g_signal_emit_by_name (mount->unmount_op, "ask-question", "Volume is busy", choices);
         run_pending ();
+        g_assert_cmpuint (w.probes, ==, 1);
         g_assert_cmpuint (w.replies, ==, 0);
 
         recorder.allowed = FALSE;
