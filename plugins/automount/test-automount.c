@@ -790,6 +790,54 @@ test_prompt_withdrawn_when_hint_invalidated (void)
         end_held_mount (manager, volume);
 }
 
+static gboolean
+set_flag (gpointer data)
+{
+        *(gboolean *) data = TRUE;
+        return G_SOURCE_REMOVE;
+}
+
+/* The Unity session name (re)appears: its lock state is unknown again
+ * until the proxy answers, so a prompt that is up is withdrawn. The
+ * callback starts a proxy on the bus, hence a private test bus. */
+static void
+test_prompt_withdrawn_when_provider_appears (void)
+{
+        GTestDBus *bus = g_test_dbus_new (G_TEST_DBUS_NONE);
+        GDBusConnection *connection;
+        GsdAutomountManager *manager;
+        OpWatch w = { 0 };
+        FakeVolume *volume;
+        gboolean done = FALSE;
+
+        g_test_dbus_up (bus);
+        connection = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL);
+        g_assert_nonnull (connection);
+
+        manager = manager_new ();
+        volume = start_held_mount (manager, &w);
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 1);
+
+        unity_appeared_callback (connection, UNITY_NAME, ":1.99", manager);
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+
+        /* let the superseded proxy call finish before the manager goes */
+        g_cancellable_cancel (manager->priv->us_cancellable);
+        g_timeout_add (200, set_flag, &done);
+        while (!done)
+                g_main_context_iteration (NULL, TRUE);
+        clear_provider_proxy (manager, &manager->priv->us_proxy);
+        g_clear_object (&manager->priv->us_cancellable);
+
+        end_held_mount (manager, volume);
+        g_object_unref (connection);
+        g_test_dbus_down (bus);
+        g_object_unref (bus);
+}
+
 static guint
 count_toplevels (void)
 {
@@ -846,6 +894,7 @@ main (int argc, char **argv)
         g_test_add_func ("/automount/prompt/withdrawn-when-locked", test_prompt_withdrawn_when_locked);
         g_test_add_func ("/automount/prompt/withdrawn-when-inactive", test_prompt_withdrawn_when_inactive);
         g_test_add_func ("/automount/prompt/withdrawn-when-hint-invalidated", test_prompt_withdrawn_when_hint_invalidated);
+        g_test_add_func ("/automount/prompt/withdrawn-when-provider-appears", test_prompt_withdrawn_when_provider_appears);
         g_test_add_func ("/automount/dialog/no-error-while-locked", test_no_error_dialog_while_locked);
 
         return g_test_run ();

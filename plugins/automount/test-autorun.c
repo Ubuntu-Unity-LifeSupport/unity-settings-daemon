@@ -23,6 +23,7 @@
 #include <gtk/gtk.h>
 
 #include "gsd-autorun.h"
+#include "gsd-mount-guard.h"
 
 /* --- a fake volume ------------------------------------------------------ */
 
@@ -69,6 +70,8 @@ typedef struct {
         GVolume *volume;
         GTask *pending_guess;
         const char *content_type;   /* the guess result; NULL = none found */
+        GTask *pending_unmount;     /* completed by the test */
+        GMountOperation *unmount_op;
 } FakeMount;
 
 typedef struct {
@@ -88,6 +91,8 @@ fake_mount_finalize (GObject *object)
 
         g_clear_object (&mount->volume);
         g_clear_object (&mount->pending_guess);
+        g_clear_object (&mount->pending_unmount);
+        g_clear_object (&mount->unmount_op);
         G_OBJECT_CLASS (fake_mount_parent_class)->finalize (object);
 }
 
@@ -155,10 +160,36 @@ fake_mount_can_eject (GMount *mount)
         return FALSE;
 }
 
+/* The dialog's Unmount button: held until the test completes it. */
+static void
+fake_mount_unmount_with_operation (GMount              *mount,
+                                   GMountUnmountFlags   flags,
+                                   GMountOperation     *mount_operation,
+                                   GCancellable        *cancellable,
+                                   GAsyncReadyCallback  callback,
+                                   gpointer             user_data)
+{
+        FakeMount *fake = (FakeMount *) mount;
+
+        g_assert_null (fake->pending_unmount);
+        fake->pending_unmount = g_task_new (mount, cancellable, callback, user_data);
+        g_set_object (&fake->unmount_op, mount_operation);
+}
+
+static gboolean
+fake_mount_unmount_with_operation_finish (GMount        *mount,
+                                          GAsyncResult  *result,
+                                          GError       **error)
+{
+        return g_task_propagate_boolean (G_TASK (result), error);
+}
+
 static void
 fake_mount_iface_init (GMountIface *iface)
 {
         iface->can_eject = fake_mount_can_eject;
+        iface->unmount_with_operation = fake_mount_unmount_with_operation;
+        iface->unmount_with_operation_finish = fake_mount_unmount_with_operation_finish;
         iface->get_icon = fake_mount_get_icon;
         iface->get_volume = fake_mount_get_volume;
         iface->get_root = fake_mount_get_root;
@@ -297,6 +328,141 @@ test_autorun_dialog_closed (void)
         g_object_unref (settings);
 }
 
+/* the dialog's response id for its Eject/Unmount button (gsd-autorun.c) */
+#define RESPONSE_EJECT 0
+
+typedef struct {
+        guint replies;
+        guint aborted;
+        GMountOperationResult last_result;
+} OpWatch;
+
+static void
+watch_reply (GMountOperation *op, GMountOperationResult result, OpWatch *w)
+{
+        w->replies++;
+        w->last_result = result;
+}
+
+static void
+watch_aborted (GMountOperation *op, OpWatch *w)
+{
+        w->aborted++;
+}
+
+static GtkWidget *
+find_visible_dialog (void)
+{
+        GList *l, *toplevels = gtk_window_list_toplevels ();
+        GtkWidget *found = NULL;
+
+        for (l = toplevels; l != NULL; l = l->next)
+                if (GTK_IS_DIALOG (l->data) && gtk_widget_get_visible (l->data))
+                        found = l->data;
+        g_list_free (toplevels);
+        return found;
+}
+
+/* Open the autorun dialog and press its Unmount button; the unmount is
+ * held by the fake mount with the dialog's own mount operation. */
+static FakeMount *
+start_dialog_unmount (GSettings *settings, Recorder *recorder)
+{
+        FakeMount *mount;
+        GtkWidget *dialog;
+
+        mount = g_object_new (fake_mount_get_type (), NULL);
+        mount->volume = g_object_new (fake_volume_get_type (), NULL);
+        mount->content_type = "x-content/audio-cdda";
+        gsd_allow_autorun_for_volume (mount->volume);
+
+        gsd_autorun (G_MOUNT (mount), settings, allowed_cb, open_window_cb, recorder);
+        fake_mount_complete_guess (mount);
+        run_pending ();
+        dialog = find_visible_dialog ();
+        g_assert_nonnull (dialog);
+
+        gtk_dialog_response (GTK_DIALOG (dialog), RESPONSE_EJECT);
+        run_pending ();
+        g_assert_nonnull (mount->pending_unmount);
+        g_assert_nonnull (mount->unmount_op);
+        return mount;
+}
+
+static void
+finish_dialog_unmount (FakeMount *mount, GError *error)
+{
+        GTask *task = g_steal_pointer (&mount->pending_unmount);
+
+        if (error != NULL)
+                g_task_return_error (task, error);
+        else
+                g_task_return_boolean (task, TRUE);
+        g_object_unref (task);
+        run_pending ();
+}
+
+/* A question of the unmount operation (e.g. which processes use the
+ * medium) that is up when the session locks is withdrawn. */
+static void
+test_autorun_unmount_prompt_withdrawn (void)
+{
+        GSettings *settings = g_settings_new ("org.gnome.desktop.media-handling");
+        Recorder recorder = { TRUE, 0 };
+        OpWatch w = { 0 };
+        const char *choices[] = { "Unmount Anyway", "Cancel", NULL };
+        FakeMount *mount;
+        guint before;
+
+        g_settings_set_boolean (settings, "autorun-never", FALSE);
+        before = count_visible_dialogs ();
+        mount = start_dialog_unmount (settings, &recorder);
+        g_signal_connect (mount->unmount_op, "reply", G_CALLBACK (watch_reply), &w);
+        g_signal_connect (mount->unmount_op, "aborted", G_CALLBACK (watch_aborted), &w);
+
+        g_signal_emit_by_name (mount->unmount_op, "ask-question", "Volume is busy", choices);
+        run_pending ();
+        g_assert_cmpuint (w.replies, ==, 0);
+
+        recorder.allowed = FALSE;
+        gsd_mount_guard_withdraw_all ();
+        run_pending ();
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+
+        finish_dialog_unmount (mount, g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED_HANDLED,
+                                                           "aborted"));
+        g_assert_cmpuint (count_visible_dialogs (), ==, before);
+
+        g_object_unref (mount);
+        g_object_unref (settings);
+}
+
+/* An unmount that fails while the session is locked shows no dialog. */
+static void
+test_autorun_unmount_error_hidden (void)
+{
+        GSettings *settings = g_settings_new ("org.gnome.desktop.media-handling");
+        Recorder recorder = { TRUE, 0 };
+        FakeMount *mount;
+        guint before;
+
+        g_settings_set_boolean (settings, "autorun-never", FALSE);
+        before = count_visible_dialogs ();
+        mount = start_dialog_unmount (settings, &recorder);
+
+        recorder.allowed = FALSE;
+        g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING, "Unable to unmount*");
+        finish_dialog_unmount (mount, g_error_new_literal (G_IO_ERROR, G_IO_ERROR_BUSY,
+                                                           "busy"));
+        g_test_assert_expected_messages ();
+        g_assert_cmpuint (count_visible_dialogs (), ==, before);
+
+        g_object_unref (mount);
+        g_object_unref (settings);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -306,6 +472,8 @@ main (int argc, char **argv)
         g_test_add_func ("/autorun/allowed-at-completion", test_autorun_allowed_at_completion);
         g_test_add_func ("/autorun/refused-at-completion", test_autorun_refused_at_completion);
         g_test_add_func ("/autorun/dialog-closed", test_autorun_dialog_closed);
+        g_test_add_func ("/autorun/unmount-prompt-withdrawn", test_autorun_unmount_prompt_withdrawn);
+        g_test_add_func ("/autorun/unmount-error-hidden", test_autorun_unmount_error_hidden);
 
         return g_test_run ();
 }
