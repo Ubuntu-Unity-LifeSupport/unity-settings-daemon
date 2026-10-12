@@ -480,8 +480,17 @@ test_autorun_unmount_error_hidden (void)
 int
 main (int argc, char **argv)
 {
+        GTestDBus *bus;
+        int ret;
+
         gtk_init (&argc, &argv);
         g_test_init (&argc, &argv, NULL);
+
+        /* gtk_mount_operation_new() (the dialog's Unmount button) looks up
+         * a mount operation handler on the session bus and does not cope
+         * with having none: give it a private one */
+        bus = g_test_dbus_new (G_TEST_DBUS_NONE);
+        g_test_dbus_up (bus);
 
         g_test_add_func ("/autorun/allowed-at-completion", test_autorun_allowed_at_completion);
         g_test_add_func ("/autorun/refused-at-completion", test_autorun_refused_at_completion);
@@ -489,5 +498,9 @@ main (int argc, char **argv)
         g_test_add_func ("/autorun/unmount-prompt-withdrawn", test_autorun_unmount_prompt_withdrawn);
         g_test_add_func ("/autorun/unmount-error-hidden", test_autorun_unmount_error_hidden);
 
-        return g_test_run ();
+        ret = g_test_run ();
+
+        g_test_dbus_stop (bus);
+        g_object_unref (bus);
+        return ret;
 }
