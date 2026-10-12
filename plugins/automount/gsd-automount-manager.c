@@ -32,6 +32,7 @@
 #include "gnome-settings-bus.h"
 #include "gsd-automount-manager.h"
 #include "gsd-autorun.h"
+#include "gsd-mount-guard.h"
 
 #define GSD_AUTOMOUNT_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), GSD_TYPE_AUTOMOUNT_MANAGER, GsdAutomountManagerPrivate))
 
@@ -44,6 +45,10 @@ struct GsdAutomountManagerPrivate
 
         GDBusProxy *session;
         gboolean session_is_active;
+        /* autorun_allowed() as last seen by update_allowed() */
+        gboolean was_allowed;
+        /* error dialogs shown, destroyed when the session locks */
+        GList *error_dialogs;
         gboolean screensaver_active;
         gboolean lockscreen_active;
         guint ss_watch_id;
@@ -81,11 +86,36 @@ static void     gsd_automount_manager_init        (GsdAutomountManager      *gsd
 
 G_DEFINE_TYPE (GsdAutomountManager, gsd_automount_manager, G_TYPE_OBJECT)
 
+static gboolean autorun_allowed (gpointer user_data);
+
+static void
+error_dialog_destroyed (GtkWidget           *dialog,
+                        GsdAutomountManager *manager)
+{
+        manager->priv->error_dialogs = g_list_remove (manager->priv->error_dialogs, dialog);
+}
+
+static void
+close_error_dialogs (GsdAutomountManager *manager)
+{
+        /* each destroy removes the dialog from the list */
+        while (manager->priv->error_dialogs != NULL)
+                gtk_widget_destroy (GTK_WIDGET (manager->priv->error_dialogs->data));
+}
+
+/* An error dialog, only while the session is active and unlocked;
+ * otherwise the error is logged. */
 static GtkDialog *
-show_error_dialog (const char *primary_text,
-		   const char *secondary_text)
+show_error_dialog (GsdAutomountManager *manager,
+		   const char          *primary_text,
+		   const char          *secondary_text)
 {
 	GtkWidget *dialog;
+
+	if (!autorun_allowed (manager)) {
+		g_warning ("%s: %s", primary_text, secondary_text);
+		return NULL;
+	}
 
 	dialog = gtk_message_dialog_new (NULL,
 					 0,
@@ -102,6 +132,9 @@ show_error_dialog (const char *primary_text,
 
 	g_signal_connect (dialog, "response",
 			  G_CALLBACK (gtk_widget_destroy), NULL);
+	g_signal_connect (dialog, "destroy",
+			  G_CALLBACK (error_dialog_destroyed), manager);
+	manager->priv->error_dialogs = g_list_prepend (manager->priv->error_dialogs, dialog);
 
 	gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
 
@@ -206,43 +239,58 @@ automount_all_volumes_idle_cb (gpointer data)
 	return FALSE;
 }
 
+typedef struct {
+        GsdAutomountManager *manager;
+        GMountOperation     *mount_op;
+} MountData;
+
 static void
 volume_mount_cb (GObject *source_object,
 		 GAsyncResult *res,
 		 gpointer user_data)
 {
-	GMountOperation *mount_op = user_data;
+	MountData *data = user_data;
 	GError *error;
 	char *primary;
 	char *name;
 
+	gsd_mount_guard_detach (data->mount_op);
+
 	error = NULL;
 	gsd_allow_autorun_for_volume_finish (G_VOLUME (source_object));
 	if (!g_volume_mount_finish (G_VOLUME (source_object), res, &error)) {
+		/* not mounted (also a prompt withdrawn at a lock): no autorun */
+		gsd_disallow_autorun_for_volume (G_VOLUME (source_object));
 		if (error->code != G_IO_ERROR_FAILED_HANDLED) {
 			name = g_volume_get_name (G_VOLUME (source_object));
 			primary = g_strdup_printf (_("Unable to mount %s"), name);
 			g_free (name);
-			show_error_dialog (primary,
+			show_error_dialog (data->manager, primary,
 				           error->message);
 			g_free (primary);
 		}
 		g_error_free (error);
 	}
 
-	g_object_unref (mount_op);
+	g_object_unref (data->mount_op);
+	g_free (data);
 }
 
 static void
-do_mount_volume (GVolume *volume)
+do_mount_volume (GsdAutomountManager *manager,
+                 GVolume             *volume)
 {
-	GMountOperation *mount_op;
+	MountData *data;
 
-	mount_op = gtk_mount_operation_new (NULL);
-	g_mount_operation_set_password_save (mount_op, G_PASSWORD_SAVE_FOR_SESSION);
+	data = g_new0 (MountData, 1);
+	data->manager = manager;
+	data->mount_op = gtk_mount_operation_new (NULL);
+	g_mount_operation_set_password_save (data->mount_op, G_PASSWORD_SAVE_FOR_SESSION);
+	/* its prompts follow the session state */
+	gsd_mount_guard_attach (data->mount_op, autorun_allowed, manager);
 
 	gsd_allow_autorun_for_volume (volume);
-	g_volume_mount (volume, 0, mount_op, NULL, volume_mount_cb, mount_op);
+	g_volume_mount (volume, 0, data->mount_op, NULL, volume_mount_cb, data);
 }
 
 static void
@@ -261,7 +309,7 @@ check_volume_queue (GsdAutomountManager *manager)
         manager->priv->startup_queue = NULL;
 
         for (l = queue; l != NULL; l = l->next)
-                do_mount_volume (G_VOLUME (l->data));
+                do_mount_volume (manager, G_VOLUME (l->data));
         g_list_free_full (queue, g_object_unref);
 
         for (l = startup; l != NULL; l = l->next) {
@@ -276,6 +324,32 @@ check_volume_queue (GsdAutomountManager *manager)
                 g_volume_mount (volume, 0, NULL, NULL, startup_volume_mount_cb, NULL);
         }
         g_list_free_full (startup, g_object_unref);
+}
+
+/* When the session stops being active and unlocked (autorun_allowed()
+ * turns false), withdraw the prompts that are up and close the helper's
+ * dialogs. Called wherever an input of autorun_allowed() changes. */
+static void
+update_allowed (GsdAutomountManager *manager)
+{
+        gboolean allowed = autorun_allowed (manager);
+
+        if (manager->priv->was_allowed && !allowed) {
+                g_debug ("Session locked or inactive: withdrawing prompts and dialogs");
+                gsd_mount_guard_withdraw_all ();
+                gsd_autorun_close_dialogs ();
+                close_error_dialogs (manager);
+        }
+        manager->priv->was_allowed = allowed;
+}
+
+/* A lock provider or logind answered: handle the transition, then mount
+ * what waits for the session to be known unlocked. */
+static void
+lock_state_changed (GsdAutomountManager *manager)
+{
+        update_allowed (manager);
+        check_volume_queue (manager);
 }
 
 static void
@@ -302,7 +376,7 @@ check_screen_lock_and_mount (GsdAutomountManager *manager,
                                                               g_object_ref (volume));
         } else {
                 /* mount it immediately */
-                do_mount_volume (volume);
+                do_mount_volume (manager, volume);
         }
 }
 
@@ -363,7 +437,7 @@ autorun_show_window (GMount *mount, gpointer user_data)
 		name = g_mount_get_name (mount);
 		primary = g_strdup_printf (_("Unable to open a folder for %s"), name);
 		g_free (name);
-		show_error_dialog (primary,
+		show_error_dialog (GSD_AUTOMOUNT_MANAGER (user_data), primary,
 				   error->message);
 		g_free (primary);
 		g_error_free (error);
@@ -429,6 +503,8 @@ session_state_changed (GDBusProxy      *session,
                         p->volume_queue = NULL;
                 }
         }
+
+        update_allowed (manager);
 }
 
 static gboolean
@@ -537,7 +613,7 @@ screensaver_signal_callback (GDBusProxy *proxy,
                 manager->priv->ss_known = TRUE;
                 g_debug ("Screensaver active changed to %d", manager->priv->screensaver_active);
 
-                check_volume_queue (manager);
+                lock_state_changed (manager);
         }
 }
 
@@ -578,7 +654,7 @@ screensaver_get_active_ready_cb (GObject *source,
         manager->priv->ss_known = TRUE;
 
         g_debug ("Screensaver GetActive() returned %d", manager->priv->screensaver_active);
-        check_volume_queue (manager);
+        lock_state_changed (manager);
 }
 
 static void
@@ -594,6 +670,7 @@ screensaver_appeared_callback (GDBusConnection *connection,
         manager->priv->ss_resolved = TRUE;
         manager->priv->ss_present = TRUE;
         manager->priv->ss_known = FALSE;
+        update_allowed (manager);
         renew_cancellable (&manager->priv->ss_cancellable);
         clear_provider_proxy (manager, &manager->priv->ss_proxy);
         manager->priv->ss_proxy = G_DBUS_PROXY (gnome_settings_bus_get_screen_saver_proxy ());
@@ -640,7 +717,7 @@ screensaver_vanished_callback (GDBusConnection *connection,
                 clear_volume_queue (manager);
         }
         /* the start-up queue is kept; it mounts once the state is known */
-        check_volume_queue (manager);
+        lock_state_changed (manager);
 }
 
 static void
@@ -674,12 +751,12 @@ unity_session_signal_callback (GDBusProxy *proxy,
         if (g_strcmp0 (signal_name, "Locked") == 0) {
                 manager->priv->lockscreen_active = TRUE;
                 manager->priv->us_known = TRUE;
-                check_volume_queue (manager);
+                lock_state_changed (manager);
                 g_debug ("Unity.Session Locked");
         } else if (g_strcmp0 (signal_name, "Unlocked") == 0) {
                 manager->priv->lockscreen_active = FALSE;
                 manager->priv->us_known = TRUE;
-                check_volume_queue (manager);
+                lock_state_changed (manager);
                 g_debug ("Unity.Session Unlocked");
         }
 }
@@ -721,7 +798,7 @@ unity_session_is_locked_cb (GObject *source,
         manager->priv->us_known = TRUE;
 
         g_debug ("Unity Session IsLocked() returned %d", manager->priv->lockscreen_active);
-        check_volume_queue (manager);
+        lock_state_changed (manager);
 }
 
 static void
@@ -785,6 +862,7 @@ unity_appeared_callback (GDBusConnection *connection,
         manager->priv->us_present = TRUE;
         manager->priv->us_known = FALSE;
         manager->priv->lockscreen_active = FALSE;
+        update_allowed (manager);
         renew_cancellable (&manager->priv->us_cancellable);
         clear_provider_proxy (manager, &manager->priv->us_proxy);
 
@@ -822,7 +900,7 @@ unity_vanished_callback (GDBusConnection *connection,
                 clear_volume_queue (manager);
         }
         /* the start-up queue is kept; it mounts once the state is known */
-        check_volume_queue (manager);
+        lock_state_changed (manager);
 }
 
 static void
@@ -866,10 +944,11 @@ login_session_properties_changed (GDBusProxy          *proxy,
                 manager->priv->locked_hint_known = TRUE;
                 g_variant_unref (v);
                 g_debug ("logind LockedHint changed to %d", manager->priv->locked_hint);
-                check_volume_queue (manager);
+                lock_state_changed (manager);
         } else if (invalidated != NULL && g_strv_contains ((const char * const *) invalidated, "LockedHint")) {
                 manager->priv->locked_hint_known = FALSE;
                 g_debug ("logind LockedHint invalidated");
+                update_allowed (manager);
         }
 }
 
@@ -907,7 +986,7 @@ login_session_proxy_ready_cb (GObject      *source,
         g_variant_unref (v);
 
         g_debug ("logind LockedHint is %d", manager->priv->locked_hint);
-        check_volume_queue (manager);
+        lock_state_changed (manager);
 }
 
 static void
@@ -1094,6 +1173,12 @@ gsd_automount_manager_stop (GsdAutomountManager *manager)
         GsdAutomountManagerPrivate *p = manager->priv;
 
         g_debug ("Stopping automounting manager");
+
+        /* nothing of ours may prompt or call back into a stopped manager */
+        gsd_mount_guard_detach_all_for (manager);
+        gsd_autorun_close_dialogs ();
+        close_error_dialogs (manager);
+        p->was_allowed = FALSE;
 
         if (p->ss_proxy) {
                 g_signal_handlers_disconnect_by_data (p->ss_proxy, manager);

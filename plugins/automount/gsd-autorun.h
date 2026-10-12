@@ -56,4 +56,8 @@ void gsd_allow_autorun_for_volume (GVolume *volume);
 void gsd_allow_autorun_for_volume_finish (GVolume *volume);
 void gsd_disallow_autorun_for_volume (GVolume *volume);
 
+/* Destroy the open autorun dialogs and the dialogs they led to; for when
+ * the session locks or is left. */
+void gsd_autorun_close_dialogs (void);
+
 #endif /* __GSD_AUTORUN_H__ */

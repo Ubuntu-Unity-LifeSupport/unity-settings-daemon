@@ -5,7 +5,9 @@ unity_fallback_mount_helper_SOURCES = \
 	gsd-automount-manager.c \
 	gsd-automount-manager.h \
 	gsd-autorun.c \
-	gsd-autorun.h
+	gsd-autorun.h \
+	gsd-mount-guard.c \
+	gsd-mount-guard.h
 
 unity_fallback_mount_helper_CPPFLAGS = \
 	-I$(top_srcdir)/gnome-settings-daemon		\
@@ -26,7 +28,9 @@ check_PROGRAMS = test-automount test-autorun
 test_automount_SOURCES = \
 	test-automount.c \
 	gsd-automount-manager.h \
-	gsd-autorun.h
+	gsd-autorun.h \
+	gsd-mount-guard.c \
+	gsd-mount-guard.h
 
 test_automount_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
 test_automount_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
@@ -35,7 +39,9 @@ test_automount_LDADD = $(unity_fallback_mount_helper_LDADD)
 test_autorun_SOURCES = \
 	test-autorun.c \
 	gsd-autorun.c \
-	gsd-autorun.h
+	gsd-autorun.h \
+	gsd-mount-guard.c \
+	gsd-mount-guard.h
 
 test_autorun_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
 test_autorun_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)

@@ -33,6 +33,7 @@
 #include <gdk/gdkkeysyms.h>
 
 #include "gsd-autorun.h"
+#include "gsd-mount-guard.h"
 
 static gboolean should_autorun_mount (GMount *mount);
 
@@ -55,9 +56,15 @@ typedef struct
 
 	char *x_content_type;
 
+	GsdAutorunAllowed allowed_func;
 	GsdAutorunOpenWindow open_window_func;
 	gpointer user_data;
 } AutorunDialogData;
+
+/* open autorun dialogs, and the error dialogs of unmounts started from
+ * them: closed by gsd_autorun_close_dialogs() */
+static GList *open_dialogs;
+static GList *error_dialogs;
 
 static int
 gsd_autorun_g_strv_find (char **strv, const char *find_me)
@@ -450,6 +457,7 @@ autorun_dialog_destroy (AutorunDialogData *data)
 					      G_CALLBACK (autorun_dialog_mount_unmounted),
 					      data);
 
+	open_dialogs = g_list_remove (open_dialogs, data);
 	gtk_widget_destroy (GTK_WIDGET (data->dialog));
 	if (data->selected_app != NULL) {
 		g_object_unref (data->selected_app);
@@ -466,19 +474,34 @@ autorun_dialog_mount_unmounted (GMount *mount, AutorunDialogData *data)
 	autorun_dialog_destroy (data);
 }
 
+typedef struct {
+	GMountOperation *mount_op;
+	gboolean should_eject;
+	GsdAutorunAllowed allowed_func;
+	gpointer user_data;
+} UnmountData;
+
+static void
+error_dialog_destroyed (GtkWidget *dialog, gpointer user_data)
+{
+	error_dialogs = g_list_remove (error_dialogs, dialog);
+}
+
 static void
 unmount_mount_callback (GObject *source_object,
 			GAsyncResult *res,
 			gpointer user_data)
 {
+	UnmountData *udata = user_data;
 	GError *error;
 	char *primary;
 	gboolean unmounted;
 	gboolean should_eject;
 	GtkWidget *dialog;
 
-
-	should_eject = user_data != NULL;
+	gsd_mount_guard_detach (udata->mount_op);
+	g_object_unref (udata->mount_op);
+	should_eject = udata->should_eject;
 
 	error = NULL;
 	if (should_eject) {
@@ -490,7 +513,13 @@ unmount_mount_callback (GObject *source_object,
 	}
 
 	if (! unmounted) {
-		if (error->code != G_IO_ERROR_FAILED_HANDLED) {
+		if (error->code == G_IO_ERROR_FAILED_HANDLED) {
+			/* already handled (also our own abort): nothing to show */
+		} else if (udata->allowed_func != NULL && !udata->allowed_func (udata->user_data)) {
+			/* not shown while the session is locked or inactive */
+			g_warning ("%s: %s", should_eject ? "Unable to eject" : "Unable to unmount",
+				   error->message);
+		} else {
 			if (should_eject) {
 				primary = g_strdup_printf (_("Unable to eject %p"), source_object);
 			} else {
@@ -510,6 +539,9 @@ unmount_mount_callback (GObject *source_object,
 			gtk_widget_show (GTK_WIDGET (dialog));
 			g_signal_connect (dialog, "response",
 					  G_CALLBACK (gtk_widget_destroy), NULL);
+			g_signal_connect (dialog, "destroy",
+					  G_CALLBACK (error_dialog_destroyed), NULL);
+			error_dialogs = g_list_prepend (error_dialogs, dialog);
 			g_free (primary);
 		}
 	}
@@ -517,30 +549,38 @@ unmount_mount_callback (GObject *source_object,
 	if (error != NULL) {
 		g_error_free (error);
 	}
+	g_free (udata);
 }
 
 static void
-do_unmount (GMount *mount, gboolean should_eject, GtkWindow *window)
+do_unmount (AutorunDialogData *data, GtkWindow *window)
 {
-	GMountOperation *mount_op;
+	UnmountData *udata;
 
-	mount_op = gtk_mount_operation_new (window);
-	if (should_eject) {
-		g_mount_eject_with_operation (mount,
+	udata = g_new0 (UnmountData, 1);
+	udata->mount_op = gtk_mount_operation_new (window);
+	udata->should_eject = data->should_eject;
+	udata->allowed_func = data->allowed_func;
+	udata->user_data = data->user_data;
+	/* its prompts (processes using the medium) follow the session state */
+	if (udata->allowed_func != NULL)
+		gsd_mount_guard_attach (udata->mount_op, udata->allowed_func, udata->user_data);
+
+	if (udata->should_eject) {
+		g_mount_eject_with_operation (data->mount,
 					      0,
-					      mount_op,
+					      udata->mount_op,
 					      NULL,
 					      unmount_mount_callback,
-					      (gpointer) 1);
+					      udata);
 	} else {
-		g_mount_unmount_with_operation (mount,
+		g_mount_unmount_with_operation (data->mount,
 						0,
-						mount_op,
+						udata->mount_op,
 						NULL,
 						unmount_mount_callback,
-						(gpointer) 0);
+						udata);
 	}
-	g_object_unref (mount_op);
 }
 
 static void
@@ -548,7 +588,7 @@ autorun_dialog_response (GtkDialog *dialog, gint response, AutorunDialogData *da
 {
 	switch (response) {
 	case AUTORUN_DIALOG_RESPONSE_EJECT:
-		do_unmount (data->mount, data->should_eject, GTK_WINDOW (dialog));
+		do_unmount (data, GTK_WINDOW (dialog));
 		break;
 
 	case GTK_RESPONSE_NONE:
@@ -604,6 +644,7 @@ combo_box_enter_ok (GtkWidget *togglebutton, GdkEventKey *event, GtkDialog *dial
 static gboolean
 do_autorun_for_content_type (GMount *mount,
                              const char *x_content_type,
+                             GsdAutorunAllowed allowed_func,
                              GsdAutorunOpenWindow open_window_func,
                              gpointer user_data)
 {
@@ -756,6 +797,7 @@ show_dialog:
 	data->selected_ignore = pref_ignore;
 	data->x_content_type = g_strdup (x_content_type);
 	data->selected_app = g_app_info_get_default_for_type (x_content_type, FALSE);
+	data->allowed_func = allowed_func;
 	data->open_window_func = open_window_func;
 	data->user_data = user_data;
 
@@ -808,6 +850,8 @@ show_dialog:
 			  G_CALLBACK (autorun_dialog_mount_unmounted),
 			  data);
 
+	open_dialogs = g_list_prepend (open_dialogs, data);
+
 out:
 	g_free (mount_name);
 	return ret;
@@ -857,6 +901,7 @@ autorun_guessed_content_type_callback (GObject *source_object,
 			int n;
 			for (n = 0; guessed_content_type[n] != NULL; n++) {
 				if (do_autorun_for_content_type (data->mount, guessed_content_type[n],
+								 data->allowed_func,
 								 data->open_window_func, data->user_data)) {
 					open_folder = TRUE;
 				}
@@ -930,6 +975,17 @@ void
 gsd_disallow_autorun_for_volume (GVolume *volume)
 {
 	g_object_set_data (G_OBJECT (volume), "gsd-allow-autorun", NULL);
+}
+
+void
+gsd_autorun_close_dialogs (void)
+{
+	/* each destroy removes the entry from its list; no response is
+	 * emitted, so nothing is launched */
+	while (open_dialogs != NULL)
+		autorun_dialog_destroy (open_dialogs->data);
+	while (error_dialogs != NULL)
+		gtk_widget_destroy (GTK_WIDGET (error_dialogs->data));
 }
 
 #define INHIBIT_AUTORUN_SECONDS 10

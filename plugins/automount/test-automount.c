@@ -57,6 +57,14 @@ gsd_disallow_autorun_for_volume (GVolume *volume)
         g_object_set_data (G_OBJECT (volume), "gsd-allow-autorun", NULL);
 }
 
+static guint close_dialogs_calls;
+
+void
+gsd_autorun_close_dialogs (void)
+{
+        close_dialogs_calls++;
+}
+
 static gboolean
 allows_autorun (gpointer object)
 {
