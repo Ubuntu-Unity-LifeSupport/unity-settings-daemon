@@ -1,3 +1,12 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity14) resolute; urgency=medium
+
+  * automount: the helper's mount prompts, error dialogs and autorun dialog
+    are shown only while the session is active and known to be unlocked;
+    the ones open when that ends are withdrawn.
+  * automount: tests for this (make check).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Mon, 12 Oct 2026 13:24:34 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity13) resolute; urgency=medium
 
   * automount: offer autorun for a medium only when the session is active
