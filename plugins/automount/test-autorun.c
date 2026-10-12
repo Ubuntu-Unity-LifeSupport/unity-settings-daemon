@@ -147,9 +147,18 @@ fake_mount_get_icon (GMount *mount)
         return g_themed_icon_new ("media-optical");
 }
 
+/* g_mount_can_eject() calls this without a NULL check; the autorun
+ * dialog asks it to choose between its Eject and Unmount buttons. */
+static gboolean
+fake_mount_can_eject (GMount *mount)
+{
+        return FALSE;
+}
+
 static void
 fake_mount_iface_init (GMountIface *iface)
 {
+        iface->can_eject = fake_mount_can_eject;
         iface->get_icon = fake_mount_get_icon;
         iface->get_volume = fake_mount_get_volume;
         iface->get_root = fake_mount_get_root;
