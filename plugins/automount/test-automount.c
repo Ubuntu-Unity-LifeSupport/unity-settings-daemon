@@ -81,6 +81,9 @@ typedef struct {
         guint mounts;             /* g_volume_mount() calls */
         gboolean last_had_op;     /* the last call passed a GMountOperation */
         gboolean last_allowed;    /* the allow flag was set at that call */
+        gboolean hold;            /* keep the mount in flight until finished */
+        GTask *held_task;
+        GMountOperation *held_op;
 } FakeVolume;
 
 typedef struct {
@@ -97,6 +100,8 @@ static void
 fake_volume_finalize (GObject *object)
 {
         g_clear_object (&((FakeVolume *) object)->mount);
+        g_clear_object (&((FakeVolume *) object)->held_task);
+        g_clear_object (&((FakeVolume *) object)->held_op);
         G_OBJECT_CLASS (fake_volume_parent_class)->finalize (object);
 }
 
@@ -155,7 +160,26 @@ fake_volume_mount (GVolume             *volume,
         fake->last_allowed = allows_autorun (volume);
 
         task = g_task_new (volume, cancellable, callback, user_data);
+        if (fake->hold) {
+                fake->held_task = task;
+                fake->held_op = mount_operation != NULL ? g_object_ref (mount_operation) : NULL;
+                return;
+        }
         g_task_return_boolean (task, TRUE);
+        g_object_unref (task);
+}
+
+/* Finish a held mount: success, or a plain failure (not "handled"). */
+static void
+fake_volume_finish (FakeVolume *fake, gboolean ok)
+{
+        GTask *task = fake->held_task;
+
+        fake->held_task = NULL;
+        if (ok)
+                g_task_return_boolean (task, TRUE);
+        else
+                g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "fake failure");
         g_object_unref (task);
 }
 
@@ -611,10 +635,198 @@ test_autorun_permission_given_when_unlocked (void)
         manager_free (manager);
 }
 
+
+/* --- prompts and dialogs follow the session state ------------------------- */
+
+typedef struct {
+        guint probes;
+        guint replies;
+        guint aborted;
+        GMountOperationResult last_result;
+} OpWatch;
+
+static void
+watch_probe (GMountOperation *op, const char *m, const char *u, const char *d,
+             GAskPasswordFlags f, OpWatch *w)
+{
+        w->probes++;
+}
+
+static void
+watch_reply (GMountOperation *op, GMountOperationResult result, OpWatch *w)
+{
+        w->replies++;
+        w->last_result = result;
+}
+
+static void
+watch_aborted (GMountOperation *op, OpWatch *w)
+{
+        w->aborted++;
+}
+
+static void set_locked_hint (GsdAutomountManager *manager, gboolean locked);
+
+/* Start a mount that stays in flight, in an active, unlocked session, and
+ * watch its operation. */
+static FakeVolume *
+start_held_mount (GsdAutomountManager *manager, OpWatch *w)
+{
+        FakeVolume *volume = fake_volume_new (TRUE);
+
+        volume->hold = TRUE;
+        manager->priv->session_is_active = TRUE;
+        set_known_unlocked (manager);
+        /* tell the manager, so it has seen the session allowed */
+        set_locked_hint (manager, FALSE);
+        check_screen_lock_and_mount (manager, G_VOLUME (volume));
+        g_assert_nonnull (volume->held_op);
+
+        /* an after-handler stands for the dialog of the class handler */
+        g_signal_connect_after (volume->held_op, "ask-password", G_CALLBACK (watch_probe), w);
+        g_signal_connect (volume->held_op, "reply", G_CALLBACK (watch_reply), w);
+        g_signal_connect (volume->held_op, "aborted", G_CALLBACK (watch_aborted), w);
+        return volume;
+}
+
+static void
+held_ask_password (FakeVolume *volume)
+{
+        g_signal_emit_by_name (volume->held_op, "ask-password", "Password?", "", "",
+                               G_ASK_PASSWORD_NEED_PASSWORD);
+}
+
+static void
+set_locked_hint (GsdAutomountManager *manager, gboolean locked)
+{
+        GVariantBuilder b;
+        GVariant *changed;
+
+        g_variant_builder_init (&b, G_VARIANT_TYPE ("a{sv}"));
+        g_variant_builder_add (&b, "{sv}", "LockedHint", g_variant_new_boolean (locked));
+        changed = g_variant_ref_sink (g_variant_builder_end (&b));
+        login_session_properties_changed (NULL, changed, NULL, manager);
+        g_variant_unref (changed);
+}
+
+static void
+end_held_mount (GsdAutomountManager *manager, FakeVolume *volume)
+{
+        fake_volume_finish (volume, TRUE);
+        run_pending ();
+        g_object_unref (volume);
+        manager_free (manager);
+}
+
+static void
+test_prompt_refused_after_lock (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+
+        set_locked_hint (manager, TRUE);
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 0);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+        end_held_mount (manager, volume);
+}
+
+static void
+test_prompt_withdrawn_when_locked (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 1);
+
+        set_locked_hint (manager, TRUE);
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+        end_held_mount (manager, volume);
+}
+
+static void
+test_prompt_withdrawn_when_inactive (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+        GVariantBuilder b;
+        GVariant *changed;
+
+        held_ask_password (volume);
+        g_variant_builder_init (&b, G_VARIANT_TYPE ("a{sv}"));
+        g_variant_builder_add (&b, "{sv}", "SessionIsActive", g_variant_new_boolean (FALSE));
+        changed = g_variant_ref_sink (g_variant_builder_end (&b));
+        session_state_changed (NULL, changed, NULL, manager);
+        g_variant_unref (changed);
+
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        end_held_mount (manager, volume);
+}
+
+static void
+test_prompt_withdrawn_when_hint_invalidated (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+        const char *invalidated[] = { "LockedHint", NULL };
+        GVariant *changed;
+
+        held_ask_password (volume);
+        changed = g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("{sv}"), NULL, 0));
+        login_session_properties_changed (NULL, changed, (char **) invalidated, manager);
+        g_variant_unref (changed);
+
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        end_held_mount (manager, volume);
+}
+
+static guint
+count_toplevels (void)
+{
+        GList *l = gtk_window_list_toplevels ();
+        guint n = g_list_length (l);
+
+        g_list_free (l);
+        return n;
+}
+
+static void
+test_no_error_dialog_while_locked (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+        guint before = count_toplevels ();
+
+        set_locked_hint (manager, TRUE);
+        fake_volume_finish (volume, FALSE);
+        run_pending ();
+        g_assert_cmpuint (count_toplevels (), ==, before);
+
+        g_object_unref (volume);
+        manager_free (manager);
+}
+
 int
 main (int argc, char **argv)
 {
+        /* the error-dialog case counts GTK toplevels; the package build runs
+         * the tests under xvfb-run */
+        gtk_init (&argc, &argv);
         g_test_init (&argc, &argv, NULL);
+        /* the helper logs a refused dialog as a warning; keep warnings
+         * non-fatal, criticals fatal */
+        g_log_set_always_fatal (G_LOG_FATAL_MASK | G_LOG_LEVEL_CRITICAL);
 
         g_test_add_func ("/automount/predicate/fresh-manager", test_predicate_fresh_manager);
         g_test_add_func ("/automount/predicate/logind-not-read", test_predicate_logind_not_read);
@@ -630,6 +842,11 @@ main (int argc, char **argv)
         g_test_add_func ("/automount/autorun/mount-added-inactive", test_autorun_mount_added_inactive);
         g_test_add_func ("/automount/autorun/permission-locked", test_autorun_permission_not_given_while_locked);
         g_test_add_func ("/automount/autorun/permission-unlocked", test_autorun_permission_given_when_unlocked);
+        g_test_add_func ("/automount/prompt/refused-after-lock", test_prompt_refused_after_lock);
+        g_test_add_func ("/automount/prompt/withdrawn-when-locked", test_prompt_withdrawn_when_locked);
+        g_test_add_func ("/automount/prompt/withdrawn-when-inactive", test_prompt_withdrawn_when_inactive);
+        g_test_add_func ("/automount/prompt/withdrawn-when-hint-invalidated", test_prompt_withdrawn_when_hint_invalidated);
+        g_test_add_func ("/automount/dialog/no-error-while-locked", test_no_error_dialog_while_locked);
 
         return g_test_run ();
 }

@@ -68,6 +68,7 @@ typedef struct {
         GObject parent;
         GVolume *volume;
         GTask *pending_guess;
+        const char *content_type;   /* the guess result; NULL = none found */
 } FakeMount;
 
 typedef struct {
@@ -140,9 +141,16 @@ fake_mount_guess_content_type_finish (GMount        *mount,
         return g_task_propagate_pointer (G_TASK (result), error);
 }
 
+static GIcon *
+fake_mount_get_icon (GMount *mount)
+{
+        return g_themed_icon_new ("media-optical");
+}
+
 static void
 fake_mount_iface_init (GMountIface *iface)
 {
+        iface->get_icon = fake_mount_get_icon;
         iface->get_volume = fake_mount_get_volume;
         iface->get_root = fake_mount_get_root;
         iface->get_name = fake_mount_get_name;
@@ -150,15 +158,17 @@ fake_mount_iface_init (GMountIface *iface)
         iface->guess_content_type_finish = fake_mount_guess_content_type_finish;
 }
 
-/* Complete the pending guess with no content type found. */
+/* Complete the pending guess with the mount's content type, if any. */
 static void
 fake_mount_complete_guess (FakeMount *mount)
 {
         GTask *task = mount->pending_guess;
+        char **types = g_new0 (char *, 2);
 
         g_assert_nonnull (task);
         mount->pending_guess = NULL;
-        g_task_return_pointer (task, g_new0 (char *, 1), (GDestroyNotify) g_strfreev);
+        types[0] = g_strdup (mount->content_type);
+        g_task_return_pointer (task, types, (GDestroyNotify) g_strfreev);
         g_object_unref (task);
 }
 
@@ -232,6 +242,52 @@ test_autorun_refused_at_completion (void)
         run_case (FALSE, 0);
 }
 
+static guint
+count_visible_dialogs (void)
+{
+        GList *l, *toplevels = gtk_window_list_toplevels ();
+        guint n = 0;
+
+        for (l = toplevels; l != NULL; l = l->next)
+                if (GTK_IS_DIALOG (l->data) && gtk_widget_get_visible (l->data))
+                        n++;
+        g_list_free (toplevels);
+        return n;
+}
+
+/* An autorun dialog that is open when the session locks is closed. */
+static void
+test_autorun_dialog_closed (void)
+{
+        GSettings *settings;
+        FakeMount *mount;
+        Recorder recorder = { TRUE, 0 };
+        guint before;
+
+        settings = g_settings_new ("org.gnome.desktop.media-handling");
+        g_settings_set_boolean (settings, "autorun-never", FALSE);
+
+        mount = g_object_new (fake_mount_get_type (), NULL);
+        mount->volume = g_object_new (fake_volume_get_type (), NULL);
+        /* a content type with no remembered choice: the dialog asks */
+        mount->content_type = "x-content/audio-cdda";
+        gsd_allow_autorun_for_volume (mount->volume);
+
+        before = count_visible_dialogs ();
+        gsd_autorun (G_MOUNT (mount), settings, allowed_cb, open_window_cb, &recorder);
+        fake_mount_complete_guess (mount);
+        run_pending ();
+        g_assert_cmpuint (count_visible_dialogs (), ==, before + 1);
+
+        gsd_autorun_close_dialogs ();
+        run_pending ();
+        g_assert_cmpuint (count_visible_dialogs (), ==, before);
+        g_assert_cmpuint (recorder.opened, ==, 0);
+
+        g_object_unref (mount);
+        g_object_unref (settings);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -240,6 +296,7 @@ main (int argc, char **argv)
 
         g_test_add_func ("/autorun/allowed-at-completion", test_autorun_allowed_at_completion);
         g_test_add_func ("/autorun/refused-at-completion", test_autorun_refused_at_completion);
+        g_test_add_func ("/autorun/dialog-closed", test_autorun_dialog_closed);
 
         return g_test_run ();
 }

@@ -23,7 +23,7 @@ unity_fallback_mount_helper_LDADD =	\
 	$(AUTOMOUNT_LIBS)		\
 	$(top_builddir)/gnome-settings-daemon/libgsd.la
 
-check_PROGRAMS = test-automount test-autorun
+check_PROGRAMS = test-automount test-autorun test-mount-guard
 
 test_automount_SOURCES = \
 	test-automount.c \
@@ -46,6 +46,15 @@ test_autorun_SOURCES = \
 test_autorun_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
 test_autorun_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
 test_autorun_LDADD = $(unity_fallback_mount_helper_LDADD)
+
+test_mount_guard_SOURCES = \
+	test-mount-guard.c \
+	gsd-mount-guard.c \
+	gsd-mount-guard.h
+
+test_mount_guard_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
+test_mount_guard_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
+test_mount_guard_LDADD = $(unity_fallback_mount_helper_LDADD)
 
 AM_TESTS_ENVIRONMENT = \
 	GSETTINGS_BACKEND=memory; export GSETTINGS_BACKEND; \
