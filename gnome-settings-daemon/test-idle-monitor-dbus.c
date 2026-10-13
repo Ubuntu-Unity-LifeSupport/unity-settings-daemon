@@ -436,6 +436,23 @@ test_muffin_remove_only_own_watch (void)
         client_free (mutter);
 }
 
+/* (e2) a client removes its own watch through the Muffin interface */
+static void
+test_muffin_remove_own_watch (void)
+{
+        Client *client = client_new (MUFFIN_NAME, MUFFIN_CORE);
+        guint id;
+
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
+        reset_idle ();
+        id = add_idle_watch (client, 400);
+        g_assert_cmpuint (id, >, 0);
+        g_assert_true (remove_watch (client, id));
+        spin (1500);
+        g_assert_false (client_got_any (client, id));
+        client_free (client);
+}
+
 /* (f) the Mutter interface works as before */
 static void
 test_mutter_unchanged (void)
@@ -507,6 +524,7 @@ static const Case cases[] = {
         { "/idle-monitor/muffin-idle-watch-fires", test_muffin_idle_watch_fires, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/watch-reaches-only-its-client", test_watch_reaches_only_its_client, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/muffin-remove-only-own-watch", test_muffin_remove_only_own_watch, "Unity:Unity7:ubuntu" },
+        { "/idle-monitor/muffin-remove-own-watch", test_muffin_remove_own_watch, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/no-muffin-outside-unity", test_no_muffin_outside_unity, "GNOME" },
 #endif
 };
