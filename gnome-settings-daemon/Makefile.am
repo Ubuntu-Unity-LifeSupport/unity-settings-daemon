@@ -42,7 +42,8 @@ libunity_settings_daemon_la_SOURCES =		\
 	
 
 nodist_libunity_settings_daemon_la_SOURCES =		\
-	$(dbus_idle_built_sources)
+	$(dbus_idle_built_sources) \
+	$(dbus_idle_muffin_built_sources)
 
 libunity_settings_daemon_include_HEADERS =		\
 	gsd-pnp-ids.h \
@@ -70,7 +71,7 @@ libunity_settings_daemon_la_LDFLAGS = 		\
 	-version-info 1:0:0 \
 	-export-symbols-regex \^gsd_.*
 
-BUILT_SOURCES = $(dbus_idle_built_sources)
+BUILT_SOURCES = $(dbus_idle_built_sources) $(dbus_idle_muffin_built_sources)
 
 dbus_idle_built_sources = meta-dbus-idle-monitor.c meta-dbus-idle-monitor.h
 
@@ -81,6 +82,17 @@ $(dbus_idle_built_sources) : Makefile.am idle-monitor.xml
 		--generate-c-code meta-dbus-idle-monitor                                \
 		--c-generate-object-manager                                             \
 		$(srcdir)/idle-monitor.xml
+
+# The same interface under Muffin's name, for libcinnamon-desktop's clients
+dbus_idle_muffin_built_sources = muffin-dbus-idle-monitor.c muffin-dbus-idle-monitor.h
+
+$(dbus_idle_muffin_built_sources) : Makefile.am idle-monitor-muffin.xml
+	$(AM_V_GEN)gdbus-codegen                                                        \
+		--interface-prefix org.cinnamon.Muffin                                  \
+		--c-namespace MuffinDBus                                                \
+		--generate-c-code muffin-dbus-idle-monitor                              \
+		--c-generate-object-manager                                             \
+		$(srcdir)/idle-monitor-muffin.xml
 
 check_PROGRAMS = test-idle-monitor-dbus
 TESTS = $(check_PROGRAMS)
@@ -176,6 +188,7 @@ EXTRA_DIST = \
 	org.gnome.SessionManager.xml        \
 	org.gnome.ScreenSaver.xml           \
 	idle-monitor.xml                    \
+	idle-monitor-muffin.xml             \
 	$(NULL)
 
 unity-settings-daemon-localeexec: unity-settings-daemon-localeexec.in
@@ -215,6 +228,7 @@ unity_settings_daemon_LDADD = 		\
 	$(NULL)
 
 CLEANFILES = $(gsd_SCRIPTS)             \
-	$(dbus_idle_built_sources)
+	$(dbus_idle_built_sources)              \
+	$(dbus_idle_muffin_built_sources)
 
 # vim: ts=8

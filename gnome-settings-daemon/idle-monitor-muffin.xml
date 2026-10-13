@@ -1,0 +1,38 @@
+<!DOCTYPE node PUBLIC
+'-//freedesktop//DTD D-BUS Object Introspection 1.0//EN'
+'http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd'>
+<node>
+  <!--
+      org.cinnamon.Muffin.IdleMonitor:
+      @short_description: idle monitor interface
+
+      Muffin's name for the same interface as org.gnome.Mutter.IdleMonitor
+      (idle-monitor.xml). libcinnamon-desktop's GnomeIdleMonitor, and so
+      cinnamon-session's presence, is a client of it; in a Unity session
+      unity-settings-daemon serves its idle monitors under this name too.
+      Muffin's ResetIdletime is not provided.
+  -->
+
+  <interface name="org.cinnamon.Muffin.IdleMonitor">
+    <method name="GetIdletime">
+      <arg name="idletime" direction="out" type="t"/>
+    </method>
+
+    <method name="AddIdleWatch">
+      <arg name="interval" direction="in" type="t" />
+      <arg name="id" direction="out" type="u" />
+    </method>
+
+    <method name="AddUserActiveWatch">
+      <arg name="id" direction="out" type="u" />
+    </method>
+
+    <method name="RemoveWatch">
+      <arg name="id" direction="in" type="u" />
+    </method>
+
+    <signal name="WatchFired">
+      <arg name="id" direction="out" type="u" />
+    </signal>
+  </interface>
+</node>

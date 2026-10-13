@@ -39,6 +39,7 @@
 #include "gsd-idle-monitor.h"
 #include "gsd-idle-monitor-private.h"
 #include "meta-dbus-idle-monitor.h"
+#include "muffin-dbus-idle-monitor.h"
 
 G_STATIC_ASSERT(sizeof(unsigned long) == sizeof(gpointer));
 
@@ -680,12 +681,36 @@ handle_get_idletime (MetaDBusIdleMonitor   *skeleton,
   return TRUE;
 }
 
+/* In a Unity session the same monitors are also exported under Muffin's
+ * name, org.cinnamon.Muffin.IdleMonitor, which libcinnamon-desktop's
+ * GnomeIdleMonitor (and so cinnamon-session's presence) is a client of.
+ * Both object managers serve the same GsdIdleMonitor objects: a watch added
+ * through either is a watch on the same XSync counter. Muffin's
+ * ResetIdletime is not provided.
+ *
+ * Carried over unchanged: on_device_added takes a reference on the device
+ * monitor that is never released, on_device_removed clears the slot while
+ * the exported skeletons keep the monitor alive, and dispose asserts that the
+ * slot is already cleared. The Muffin export takes no reference of its own
+ * on the monitors. */
+
+#define MUTTER_IDLE_MONITOR_PATH "/org/gnome/Mutter/IdleMonitor"
+#define MUFFIN_IDLE_MONITOR_NAME "org.cinnamon.Muffin.IdleMonitor"
+#define MUFFIN_IDLE_MONITOR_PATH "/org/cinnamon/Muffin/IdleMonitor"
+
+static GDBusObjectManagerServer *mutter_manager;
+static GDBusObjectManagerServer *muffin_manager;
+
+/* watches added through the Muffin interface: watch id -> DBusWatch */
+static GHashTable *muffin_watches;
+
 typedef struct {
-  MetaDBusIdleMonitor *dbus_monitor;
+  GDBusInterfaceSkeleton *skeleton;
   GsdIdleMonitor *monitor;
   char *dbus_name;
   guint watch_id;
   guint name_watcher_id;
+  gboolean muffin;
 } DBusWatch;
 
 static void
@@ -693,7 +718,11 @@ destroy_dbus_watch (gpointer data)
 {
   DBusWatch *watch = data;
 
-  g_object_unref (watch->dbus_monitor);
+  if (watch->muffin &&
+      g_hash_table_lookup (muffin_watches, GUINT_TO_POINTER (watch->watch_id)) == watch)
+    g_hash_table_remove (muffin_watches, GUINT_TO_POINTER (watch->watch_id));
+
+  g_object_unref (watch->skeleton);
   g_object_unref (watch->monitor);
   g_free (watch->dbus_name);
   g_bus_unwatch_name (watch->name_watcher_id);
@@ -707,12 +736,14 @@ dbus_idle_callback (GsdIdleMonitor *monitor,
                     gpointer         user_data)
 {
   DBusWatch *watch = user_data;
-  GDBusInterfaceSkeleton *skeleton = G_DBUS_INTERFACE_SKELETON (watch->dbus_monitor);
+  GDBusInterfaceSkeleton *skeleton = watch->skeleton;
 
+  /* to the client that added the watch, on the object and the interface it
+   * added it through */
   g_dbus_connection_emit_signal (g_dbus_interface_skeleton_get_connection (skeleton),
                                  watch->dbus_name,
                                  g_dbus_interface_skeleton_get_object_path (skeleton),
-                                 "org.gnome.Mutter.IdleMonitor",
+                                 g_dbus_interface_skeleton_get_info (skeleton)->name,
                                  "WatchFired",
                                  g_variant_new ("(u)", watch_id),
                                  NULL);
@@ -729,15 +760,17 @@ name_vanished_callback (GDBusConnection *connection,
 }
 
 static DBusWatch *
-make_dbus_watch (MetaDBusIdleMonitor   *skeleton,
-                 GDBusMethodInvocation *invocation,
-                 GsdIdleMonitor       *monitor)
+make_dbus_watch (GDBusInterfaceSkeleton *skeleton,
+                 GDBusMethodInvocation  *invocation,
+                 GsdIdleMonitor         *monitor,
+                 gboolean                muffin)
 {
   DBusWatch *watch;
 
-  watch = g_slice_new (DBusWatch);
-  watch->dbus_monitor = g_object_ref (skeleton);
+  watch = g_slice_new0 (DBusWatch);
+  watch->skeleton = g_object_ref (skeleton);
   watch->monitor = g_object_ref (monitor);
+  watch->muffin = muffin;
   watch->dbus_name = g_strdup (g_dbus_method_invocation_get_sender (invocation));
   watch->name_watcher_id = g_bus_watch_name_on_connection (g_dbus_method_invocation_get_connection (invocation),
                                                            watch->dbus_name,
@@ -749,19 +782,62 @@ make_dbus_watch (MetaDBusIdleMonitor   *skeleton,
   return watch;
 }
 
+static void
+register_muffin_watch (DBusWatch *watch)
+{
+  if (!watch->muffin)
+    return;
+
+  if (muffin_watches == NULL)
+    muffin_watches = g_hash_table_new (NULL, NULL);
+  g_hash_table_insert (muffin_watches, GUINT_TO_POINTER (watch->watch_id), watch);
+}
+
+static guint
+add_dbus_idle_watch (GDBusInterfaceSkeleton *skeleton,
+                     GDBusMethodInvocation  *invocation,
+                     guint64                 interval,
+                     GsdIdleMonitor         *monitor,
+                     gboolean                muffin)
+{
+  DBusWatch *watch;
+
+  watch = make_dbus_watch (skeleton, invocation, monitor, muffin);
+  watch->watch_id = gsd_idle_monitor_add_idle_watch (monitor, interval,
+                                                      dbus_idle_callback, watch, destroy_dbus_watch);
+  register_muffin_watch (watch);
+
+  return watch->watch_id;
+}
+
+static guint
+add_dbus_user_active_watch (GDBusInterfaceSkeleton *skeleton,
+                            GDBusMethodInvocation  *invocation,
+                            GsdIdleMonitor         *monitor,
+                            gboolean                muffin)
+{
+  DBusWatch *watch;
+
+  watch = make_dbus_watch (skeleton, invocation, monitor, muffin);
+  watch->watch_id = gsd_idle_monitor_add_user_active_watch (monitor,
+                                                             dbus_idle_callback, watch,
+                                                             destroy_dbus_watch);
+  register_muffin_watch (watch);
+
+  return watch->watch_id;
+}
+
 static gboolean
 handle_add_idle_watch (MetaDBusIdleMonitor   *skeleton,
                        GDBusMethodInvocation *invocation,
                        guint64                interval,
                        GsdIdleMonitor       *monitor)
 {
-  DBusWatch *watch;
+  guint id;
 
-  watch = make_dbus_watch (skeleton, invocation, monitor);
-  watch->watch_id = gsd_idle_monitor_add_idle_watch (monitor, interval,
-                                                      dbus_idle_callback, watch, destroy_dbus_watch);
-
-  meta_dbus_idle_monitor_complete_add_idle_watch (skeleton, invocation, watch->watch_id);
+  id = add_dbus_idle_watch (G_DBUS_INTERFACE_SKELETON (skeleton), invocation,
+                            interval, monitor, FALSE);
+  meta_dbus_idle_monitor_complete_add_idle_watch (skeleton, invocation, id);
 
   return TRUE;
 }
@@ -771,14 +847,11 @@ handle_add_user_active_watch (MetaDBusIdleMonitor   *skeleton,
                               GDBusMethodInvocation *invocation,
                               GsdIdleMonitor       *monitor)
 {
-  DBusWatch *watch;
+  guint id;
 
-  watch = make_dbus_watch (skeleton, invocation, monitor);
-  watch->watch_id = gsd_idle_monitor_add_user_active_watch (monitor,
-                                                             dbus_idle_callback, watch,
-                                                             destroy_dbus_watch);
-
-  meta_dbus_idle_monitor_complete_add_user_active_watch (skeleton, invocation, watch->watch_id);
+  id = add_dbus_user_active_watch (G_DBUS_INTERFACE_SKELETON (skeleton), invocation,
+                                   monitor, FALSE);
+  meta_dbus_idle_monitor_complete_add_user_active_watch (skeleton, invocation, id);
 
   return TRUE;
 }
@@ -791,6 +864,77 @@ handle_remove_watch (MetaDBusIdleMonitor   *skeleton,
 {
   gsd_idle_monitor_remove_watch (monitor, id);
   meta_dbus_idle_monitor_complete_remove_watch (skeleton, invocation);
+
+  return TRUE;
+}
+
+static gboolean
+muffin_handle_get_idletime (MuffinDBusIdleMonitor *skeleton,
+                            GDBusMethodInvocation *invocation,
+                            GsdIdleMonitor        *monitor)
+{
+  guint64 idletime;
+
+  idletime = gsd_idle_monitor_get_idletime (monitor);
+  muffin_dbus_idle_monitor_complete_get_idletime (skeleton, invocation, idletime);
+
+  return TRUE;
+}
+
+static gboolean
+muffin_handle_add_idle_watch (MuffinDBusIdleMonitor *skeleton,
+                              GDBusMethodInvocation *invocation,
+                              guint64                interval,
+                              GsdIdleMonitor        *monitor)
+{
+  guint id;
+
+  id = add_dbus_idle_watch (G_DBUS_INTERFACE_SKELETON (skeleton), invocation,
+                            interval, monitor, TRUE);
+  muffin_dbus_idle_monitor_complete_add_idle_watch (skeleton, invocation, id);
+
+  return TRUE;
+}
+
+static gboolean
+muffin_handle_add_user_active_watch (MuffinDBusIdleMonitor *skeleton,
+                                     GDBusMethodInvocation *invocation,
+                                     GsdIdleMonitor        *monitor)
+{
+  guint id;
+
+  id = add_dbus_user_active_watch (G_DBUS_INTERFACE_SKELETON (skeleton), invocation,
+                                   monitor, TRUE);
+  muffin_dbus_idle_monitor_complete_add_user_active_watch (skeleton, invocation, id);
+
+  return TRUE;
+}
+
+/* Watch ids come from one counter for the whole process, shared with the
+ * plugins' own watches: through this interface a client removes only the
+ * watches it added through it, on this monitor. Any other id is ignored,
+ * as an unknown id is. */
+static gboolean
+muffin_handle_remove_watch (MuffinDBusIdleMonitor *skeleton,
+                            GDBusMethodInvocation *invocation,
+                            guint                  id,
+                            GsdIdleMonitor        *monitor)
+{
+  DBusWatch *watch = NULL;
+
+  if (muffin_watches != NULL)
+    watch = g_hash_table_lookup (muffin_watches, GUINT_TO_POINTER (id));
+
+  if (watch != NULL &&
+      watch->monitor == monitor &&
+      g_strcmp0 (watch->dbus_name, g_dbus_method_invocation_get_sender (invocation)) == 0)
+    gsd_idle_monitor_remove_watch (monitor, id);
+  else
+    g_debug ("Ignoring RemoveWatch (%u) from %s: not a watch it added on %s",
+             id, g_dbus_method_invocation_get_sender (invocation),
+             g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (skeleton)));
+
+  muffin_dbus_idle_monitor_complete_remove_watch (skeleton, invocation);
 
   return TRUE;
 }
@@ -823,40 +967,151 @@ create_monitor_skeleton (GDBusObjectManagerServer *manager,
 }
 
 static void
-on_device_added (GdkDeviceManager         *device_manager,
-                 GdkDevice                *device,
-                 GDBusObjectManagerServer *manager)
+create_muffin_monitor_skeleton (GDBusObjectManagerServer *manager,
+                                GsdIdleMonitor           *monitor,
+                                const char               *path)
 {
+  MuffinDBusIdleMonitor *skeleton;
+  MuffinDBusObjectSkeleton *object;
 
-  GsdIdleMonitor *monitor;
-  int device_id;
+  skeleton = muffin_dbus_idle_monitor_skeleton_new ();
+  g_signal_connect_object (skeleton, "handle-add-idle-watch",
+                           G_CALLBACK (muffin_handle_add_idle_watch), monitor, 0);
+  g_signal_connect_object (skeleton, "handle-add-user-active-watch",
+                           G_CALLBACK (muffin_handle_add_user_active_watch), monitor, 0);
+  g_signal_connect_object (skeleton, "handle-remove-watch",
+                           G_CALLBACK (muffin_handle_remove_watch), monitor, 0);
+  g_signal_connect_object (skeleton, "handle-get-idletime",
+                           G_CALLBACK (muffin_handle_get_idletime), monitor, 0);
+
+  object = muffin_dbus_object_skeleton_new (path);
+  muffin_dbus_object_skeleton_set_idle_monitor (object, skeleton);
+
+  g_dbus_object_manager_server_export (manager, G_DBUS_OBJECT_SKELETON (object));
+
+  g_object_unref (skeleton);
+  g_object_unref (object);
+}
+
+static void
+export_monitor (GsdIdleMonitor *monitor,
+                const char     *name)
+{
   char *path;
 
-  device_id = gdk_x11_device_get_id (device);
-  monitor = gsd_idle_monitor_get_for_device (device_id);
-  g_object_ref(monitor);
-  path = g_strdup_printf ("/org/gnome/Mutter/IdleMonitor/Device%d", device_id);
+  path = g_strdup_printf (MUTTER_IDLE_MONITOR_PATH "/%s", name);
+  create_monitor_skeleton (mutter_manager, monitor, path);
+  g_free (path);
 
-  create_monitor_skeleton (manager, monitor, path);
+  if (muffin_manager == NULL)
+    return;
+
+  path = g_strdup_printf (MUFFIN_IDLE_MONITOR_PATH "/%s", name);
+  create_muffin_monitor_skeleton (muffin_manager, monitor, path);
   g_free (path);
 }
 
 static void
-on_device_removed (GdkDeviceManager         *device_manager,
-                   GdkDevice                *device,
-                   GDBusObjectManagerServer *manager)
+on_device_added (GdkDeviceManager *device_manager,
+                 GdkDevice        *device,
+                 gpointer          user_data)
+{
+
+  GsdIdleMonitor *monitor;
+  int device_id;
+  char *name;
+
+  device_id = gdk_x11_device_get_id (device);
+  monitor = gsd_idle_monitor_get_for_device (device_id);
+  g_object_ref(monitor);
+  name = g_strdup_printf ("Device%d", device_id);
+
+  export_monitor (monitor, name);
+  g_free (name);
+}
+
+static void
+on_device_removed (GdkDeviceManager *device_manager,
+                   GdkDevice        *device,
+                   gpointer          user_data)
 {
   int device_id;
   char *path;
 
   device_id = gdk_x11_device_get_id (device);
-  path = g_strdup_printf ("/org/gnome/Mutter/IdleMonitor/Device%d", device_id);
-  g_dbus_object_manager_server_unexport (manager, path);
+  path = g_strdup_printf (MUTTER_IDLE_MONITOR_PATH "/Device%d", device_id);
+  g_dbus_object_manager_server_unexport (mutter_manager, path);
   g_free (path);
+
+  if (muffin_manager != NULL)
+    {
+      path = g_strdup_printf (MUFFIN_IDLE_MONITOR_PATH "/Device%d", device_id);
+      g_dbus_object_manager_server_unexport (muffin_manager, path);
+      g_free (path);
+    }
 
   g_clear_object (&device_monitors[device_id]);
   if (device_id == device_id_max)
     device_id_max--;
+}
+
+static gboolean
+in_desktop (const gchar *name)
+{
+  const gchar *desktop_name_list;
+  gchar **names;
+  gboolean in_list = FALSE;
+  gint i;
+
+  desktop_name_list = g_getenv ("XDG_CURRENT_DESKTOP");
+  if (!desktop_name_list)
+    return FALSE;
+
+  names = g_strsplit (desktop_name_list, ":", -1);
+  for (i = 0; names[i] && !in_list; i++)
+    if (strcmp (names[i], name) == 0)
+      in_list = TRUE;
+  g_strfreev (names);
+
+  return in_list;
+}
+
+static void
+on_muffin_name_acquired (GDBusConnection *connection,
+                         const char      *name,
+                         gpointer         user_data)
+{
+  g_debug ("Acquired name %s\n", name);
+}
+
+/* Muffin itself has the name (Muffin running in this session), or the
+ * process is exiting. This is also called at start when the request was
+ * only queued behind Muffin: there are no watches then. Watches added
+ * through this interface while the name was ours are dropped: their clients
+ * now talk to the new owner and would ignore a WatchFired from us. The
+ * objects stay exported; the queued request gets the name back when Muffin
+ * goes away. */
+static void
+on_muffin_name_lost (GDBusConnection *connection,
+                     const char      *name,
+                     gpointer         user_data)
+{
+  GList *watches, *l;
+
+  g_debug ("Lost or failed to acquire name %s\n", name);
+
+  if (muffin_watches == NULL)
+    return;
+
+  /* removing a watch takes it out of the table */
+  watches = g_hash_table_get_values (muffin_watches);
+  for (l = watches; l != NULL; l = l->next)
+    {
+      DBusWatch *watch = l->data;
+
+      gsd_idle_monitor_remove_watch (watch->monitor, watch->watch_id);
+    }
+  g_list_free (watches);
 }
 
 static void
@@ -864,20 +1119,20 @@ on_bus_acquired (GDBusConnection *connection,
                  const char      *name,
                  gpointer         user_data)
 {
-  GDBusObjectManagerServer *manager;
   GdkDeviceManager *device_manager;
   GsdIdleMonitor *monitor;
   GList *devices, *iter;
-  char *path;
 
-  manager = g_dbus_object_manager_server_new ("/org/gnome/Mutter/IdleMonitor");
+  mutter_manager = g_dbus_object_manager_server_new (MUTTER_IDLE_MONITOR_PATH);
+
+  /* Muffin's name only in a Unity session, where Muffin does not run */
+  if (in_desktop ("Unity"))
+    muffin_manager = g_dbus_object_manager_server_new (MUFFIN_IDLE_MONITOR_PATH);
 
   /* We never clear the core monitor, as that's supposed to cumulate idle times from
      all devices */
   monitor = gsd_idle_monitor_get_core ();
-  path = g_strdup ("/org/gnome/Mutter/IdleMonitor/Core");
-  create_monitor_skeleton (manager, monitor, path);
-  g_free (path);
+  export_monitor (monitor, "Core");
 
   device_manager =  gdk_display_get_device_manager (gdk_display_get_default ());
   g_object_ref (device_manager);
@@ -887,16 +1142,31 @@ on_bus_acquired (GDBusConnection *connection,
   devices = g_list_concat (devices, gdk_device_manager_list_devices (device_manager, GDK_DEVICE_TYPE_FLOATING));
 
   for (iter = devices; iter; iter = iter->next)
-    on_device_added (device_manager, iter->data, manager);
+    on_device_added (device_manager, iter->data, NULL);
 
   g_list_free (devices);
 
-  g_signal_connect_object (device_manager, "device-added",
-                           G_CALLBACK (on_device_added), manager, 0);
-  g_signal_connect_object (device_manager, "device-removed",
-                           G_CALLBACK (on_device_removed), manager, 0);
+  /* one handler each, for both managers */
+  g_signal_connect (device_manager, "device-added",
+                    G_CALLBACK (on_device_added), NULL);
+  g_signal_connect (device_manager, "device-removed",
+                    G_CALLBACK (on_device_removed), NULL);
 
-  g_dbus_object_manager_server_set_connection (manager, connection);
+  g_dbus_object_manager_server_set_connection (mutter_manager, connection);
+
+  if (muffin_manager == NULL)
+    return;
+
+  /* The objects are exported before the name is requested, so a client
+   * that sees the name finds them. Never REPLACE: if Muffin runs, it keeps
+   * its name. */
+  g_dbus_object_manager_server_set_connection (muffin_manager, connection);
+  g_bus_own_name_on_connection (connection,
+                                MUFFIN_IDLE_MONITOR_NAME,
+                                G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT,
+                                on_muffin_name_acquired,
+                                on_muffin_name_lost,
+                                NULL, NULL);
 }
 
 static void
