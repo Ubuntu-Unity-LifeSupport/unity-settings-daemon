@@ -319,6 +319,8 @@ test_muffin_get_idletime (void)
         GVariant *reply;
         guint64 idletime = 0;
 
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
+
         reset_idle ();
         spin (300);
         reply = call (client->connection, MUFFIN_NAME, MUFFIN_CORE, MUFFIN_NAME,
@@ -338,6 +340,8 @@ test_muffin_idle_watch_fires (void)
 {
         Client *client = client_new (MUFFIN_NAME, MUFFIN_CORE);
         guint id;
+
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
 
         reset_idle ();
         id = add_idle_watch (client, 500);
@@ -367,6 +371,8 @@ test_watch_reaches_only_its_client (void)
         Client *two = client_new (MUFFIN_NAME, MUFFIN_CORE);
         Client *mutter = client_new (MUTTER_NAME, MUTTER_CORE);
         guint id_one, id_two, id_mutter;
+
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
 
         reset_idle ();
         id_one = add_idle_watch (one, 400);
@@ -408,6 +414,8 @@ test_muffin_remove_only_own_watch (void)
         Client *two = client_new (MUFFIN_NAME, MUFFIN_CORE);
         Client *mutter = client_new (MUTTER_NAME, MUTTER_CORE);
         guint id_two, id_mutter;
+
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
 
         reset_idle ();
         id_two = add_idle_watch (two, 600);
@@ -515,6 +523,8 @@ run_case (gconstpointer data)
                 g_test_dbus_up (bus);
                 g_setenv ("XDG_CURRENT_DESKTOP", c->desktop, TRUE);
                 gsd_idle_monitor_init_dbus (FALSE);
+                /* the names are acquired asynchronously */
+                g_assert_true (wait_for_owner (MUTTER_NAME));
                 c->func ();
                 /* the export keeps the shared connection for the life of the
                  * process, so stop the daemon instead of waiting for it */
@@ -532,9 +542,17 @@ int
 main (int argc, char **argv)
 {
         guint i;
+        char **args;
+        int n_args;
 
         g_setenv ("GSETTINGS_BACKEND", "memory", TRUE);
-        gtk_test_init (&argc, &argv, NULL);
+
+        /* report every case, not only up to the first failing one */
+        args = g_new0 (char *, argc + 2);
+        for (n_args = 0; n_args < argc; n_args++)
+                args[n_args] = argv[n_args];
+        args[n_args++] = (char *) "--keep-going";
+        gtk_test_init (&n_args, &args, NULL);
 
         for (i = 0; i < G_N_ELEMENTS (cases); i++)
                 g_test_add_data_func (cases[i].path, &cases[i], run_case);
