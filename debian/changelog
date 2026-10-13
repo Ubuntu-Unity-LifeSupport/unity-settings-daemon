@@ -1,3 +1,18 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity16) resolute; urgency=medium
+
+  * idle-monitor: in a Unity session, also serve the idle monitors as
+    org.cinnamon.Muffin.IdleMonitor, so that cinnamon-session's presence
+    goes idle after the idle delay (taken only when Muffin does not hold
+    the name; WatchFired only to the client that added the watch; through
+    this interface a client removes only its own watches).
+  * idle-monitor: tests of the D-Bus export in make check.
+  * Breaks cinnamon-session (<< 6.4.2-1+unity7): the cinnamon-session that
+    takes the idle delay from the Unity Control Center's setting
+    (org.gnome.desktop.session idle-delay). A later base version of
+    cinnamon-session without that change would satisfy this bound.
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Tue, 13 Oct 2026 10:57:06 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity15) resolute; urgency=medium
 
   * automount: hardening in the mount guard's cleanup.
