@@ -782,6 +782,13 @@ make_dbus_watch (GDBusInterfaceSkeleton *skeleton,
   return watch;
 }
 
+/* for test-idle-monitor-registry, which builds this file in; not exported */
+guint
+_idle_monitor_muffin_watch_count (void)
+{
+  return muffin_watches != NULL ? g_hash_table_size (muffin_watches) : 0;
+}
+
 static void
 register_muffin_watch (DBusWatch *watch)
 {

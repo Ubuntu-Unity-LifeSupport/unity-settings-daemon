@@ -460,6 +460,29 @@ test_no_muffin_outside_unity (void)
         g_assert_false (name_has_owner (MUFFIN_NAME));
 }
 
+#ifdef IDLE_MONITOR_REGISTRY_TEST
+/* (h) a client's watches go when its connection closes */
+static void
+test_muffin_watches_go_with_client (void)
+{
+        Client *client = client_new (MUFFIN_NAME, MUFFIN_CORE);
+        gint64 end;
+
+        g_assert_true (wait_for_owner (MUFFIN_NAME));
+        g_assert_cmpuint (_idle_monitor_muffin_watch_count (), ==, 0);
+        reset_idle ();
+        g_assert_cmpuint (add_idle_watch (client, 60000), >, 0);
+        g_assert_cmpuint (add_idle_watch (client, 120000), >, 0);
+        g_assert_cmpuint (_idle_monitor_muffin_watch_count (), ==, 2);
+
+        client_free (client);
+        end = g_get_monotonic_time () + WAIT_MS * 1000;
+        while (_idle_monitor_muffin_watch_count () > 0 && g_get_monotonic_time () < end)
+                spin (20);
+        g_assert_cmpuint (_idle_monitor_muffin_watch_count (), ==, 0);
+}
+#endif
+
 typedef struct {
         const char *path;
         void      (*func) (void);
@@ -467,6 +490,9 @@ typedef struct {
 } Case;
 
 static const Case cases[] = {
+#ifdef IDLE_MONITOR_REGISTRY_TEST
+        { "/idle-monitor/muffin-watches-go-with-client", test_muffin_watches_go_with_client, "Unity:Unity7:ubuntu" },
+#else
         { "/idle-monitor/mutter-unchanged", test_mutter_unchanged, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/muffin-core-object", test_muffin_core_object, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/muffin-get-idletime", test_muffin_get_idletime, "Unity:Unity7:ubuntu" },
@@ -474,6 +500,7 @@ static const Case cases[] = {
         { "/idle-monitor/watch-reaches-only-its-client", test_watch_reaches_only_its_client, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/muffin-remove-only-own-watch", test_muffin_remove_only_own_watch, "Unity:Unity7:ubuntu" },
         { "/idle-monitor/no-muffin-outside-unity", test_no_muffin_outside_unity, "GNOME" },
+#endif
 };
 
 /* Each case runs in its own process, with its own private bus: the export is

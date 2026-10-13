@@ -27,3 +27,6 @@ void gsd_idle_monitor_handle_xevent_all (XEvent *xevent);
 
 
 void gsd_idle_monitor_init_dbus (gboolean replace);
+
+/* test-idle-monitor-registry only */
+G_GNUC_INTERNAL guint _idle_monitor_muffin_watch_count (void);

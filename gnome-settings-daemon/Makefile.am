@@ -94,7 +94,7 @@ $(dbus_idle_muffin_built_sources) : Makefile.am idle-monitor-muffin.xml
 		--c-generate-object-manager                                             \
 		$(srcdir)/idle-monitor-muffin.xml
 
-check_PROGRAMS = test-idle-monitor-dbus
+check_PROGRAMS = test-idle-monitor-dbus test-idle-monitor-registry
 TESTS = $(check_PROGRAMS)
 
 test_idle_monitor_dbus_SOURCES = \
@@ -105,6 +105,26 @@ test_idle_monitor_dbus_CFLAGS = $(LIBUNITY_SETTINGS_DAEMON_CFLAGS)
 
 test_idle_monitor_dbus_LDADD = \
 	libunity-settings-daemon.la \
+	$(LIBUNITY_SETTINGS_DAEMON_LIBS)
+
+# the same test source with the monitor built in, for a check of its
+# watch registry that is not part of the library's interface
+test_idle_monitor_registry_SOURCES = \
+	test-idle-monitor-dbus.c \
+	gsd-idle-monitor.c \
+	gsd-idle-monitor.h \
+	gsd-idle-monitor-private.h
+
+nodist_test_idle_monitor_registry_SOURCES = \
+	$(dbus_idle_built_sources) \
+	$(dbus_idle_muffin_built_sources)
+
+test_idle_monitor_registry_CFLAGS = \
+	-DIDLE_MONITOR_REGISTRY_TEST \
+	$(LIBUNITY_SETTINGS_DAEMON_CFLAGS)
+
+test_idle_monitor_registry_LDADD = \
+	-lm \
 	$(LIBUNITY_SETTINGS_DAEMON_LIBS)
 
 AM_TESTS_ENVIRONMENT = \
