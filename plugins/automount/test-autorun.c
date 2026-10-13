@@ -338,15 +338,15 @@ typedef struct {
         GMountOperationResult last_result;
 } OpWatch;
 
-/* Stands for GtkMountOperation's question dialog: runs after the guard's
- * handler and keeps the class handler (which needs a session bus for its
- * portal lookup) from running. That GTK closes its dialog on "aborted"
- * is checked by review (gtkmountoperation.c). */
+/* Counts the questions that reach the operation. It does not stop the
+ * emission: GtkMountOperation's class handler then shows its own question
+ * dialog (on the private test bus nobody owns the mount operation handler
+ * name, so GTK uses its built-in dialog), and the test sees that dialog
+ * come and go. */
 static void
 watch_question (GMountOperation *op, const char *message, const char **choices, OpWatch *w)
 {
         w->probes++;
-        g_signal_stop_emission_by_name (op, "ask-question");
 }
 
 static void
@@ -425,6 +425,7 @@ test_autorun_unmount_prompt_withdrawn (void)
         const char *choices[] = { "Unmount Anyway", "Cancel", NULL };
         FakeMount *mount;
         guint before;
+        guint before_question;
 
         g_settings_set_boolean (settings, "autorun-never", FALSE);
         before = count_visible_dialogs ();
@@ -433,10 +434,14 @@ test_autorun_unmount_prompt_withdrawn (void)
         g_signal_connect (mount->unmount_op, "reply", G_CALLBACK (watch_reply), &w);
         g_signal_connect (mount->unmount_op, "aborted", G_CALLBACK (watch_aborted), &w);
 
+        /* the autorun dialog is gone by now (Eject was pressed) */
+        before_question = count_visible_dialogs ();
         g_signal_emit_by_name (mount->unmount_op, "ask-question", "Volume is busy", choices);
         run_pending ();
         g_assert_cmpuint (w.probes, ==, 1);
         g_assert_cmpuint (w.replies, ==, 0);
+        g_assert_true (gtk_mount_operation_is_showing (GTK_MOUNT_OPERATION (mount->unmount_op)));
+        g_assert_cmpuint (count_visible_dialogs (), ==, before_question + 1);
 
         recorder.allowed = FALSE;
         gsd_mount_guard_withdraw_all ();
@@ -444,6 +449,8 @@ test_autorun_unmount_prompt_withdrawn (void)
         g_assert_cmpuint (w.aborted, ==, 1);
         g_assert_cmpuint (w.replies, ==, 1);
         g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+        g_assert_false (gtk_mount_operation_is_showing (GTK_MOUNT_OPERATION (mount->unmount_op)));
+        g_assert_cmpuint (count_visible_dialogs (), ==, before_question);
 
         finish_dialog_unmount (mount, g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED_HANDLED,
                                                            "aborted"));
