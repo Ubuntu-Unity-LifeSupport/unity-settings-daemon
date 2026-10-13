@@ -53,12 +53,15 @@ test_mount_guard_SOURCES = \
 	gsd-mount-guard.h
 
 test_mount_guard_CPPFLAGS = $(unity_fallback_mount_helper_CPPFLAGS)
-test_mount_guard_CFLAGS = $(unity_fallback_mount_helper_CFLAGS)
+# AddressSanitizer for this test program only.
+test_mount_guard_CFLAGS = $(unity_fallback_mount_helper_CFLAGS) -fsanitize=address -fno-omit-frame-pointer
+test_mount_guard_LDFLAGS = -fsanitize=address
 test_mount_guard_LDADD = $(unity_fallback_mount_helper_LDADD)
 
 AM_TESTS_ENVIRONMENT = \
 	GSETTINGS_BACKEND=memory; export GSETTINGS_BACKEND; \
-	G_DEBUG=gc-friendly; export G_DEBUG;
+	G_DEBUG=gc-friendly; export G_DEBUG; \
+	ASAN_OPTIONS=detect_leaks=0; export ASAN_OPTIONS;
 
 TESTS = $(check_PROGRAMS)
 

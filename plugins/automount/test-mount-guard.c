@@ -234,6 +234,26 @@ test_detach_all_for_owner (void)
         op_free (op2);
 }
 
+static void
+detach_in_reply (GMountOperation *op, GMountOperationResult result, gpointer data)
+{
+        gsd_mount_guard_detach (op);
+}
+
+static void
+test_detach_all_for_sync_reply (void)
+{
+        Fixture fx = { TRUE };
+        GMountOperation *op = op_new (&fx);
+
+        g_signal_connect (op, "reply", G_CALLBACK (detach_in_reply), NULL);
+        ask_password (op);
+        gsd_mount_guard_detach_all_for (&fx);
+        g_assert_cmpuint (fx.aborted, ==, 1);
+        g_assert_cmpuint (fx.replies, ==, 1);
+        g_object_unref (op);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -247,5 +267,6 @@ main (int argc, char **argv)
         g_test_add_func ("/mount-guard/detach-while-pending", test_detach_while_pending);
         g_test_add_func ("/mount-guard/detach-all-for-owner", test_detach_all_for_owner);
 
+        g_test_add_func ("/mount-guard/detach-all-for-sync-reply", test_detach_all_for_sync_reply);
         return g_test_run ();
 }
