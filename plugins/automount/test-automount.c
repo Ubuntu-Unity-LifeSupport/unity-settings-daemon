@@ -865,6 +865,176 @@ test_no_error_dialog_while_locked (void)
         manager_free (manager);
 }
 
+static void
+count_destroy (GtkWidget *widget, guint *destroyed)
+{
+        (*destroyed)++;
+}
+
+/* An allowed manager with one error dialog of its own up. */
+static GsdAutomountManager *
+allowed_manager_with_error_dialog (guint *destroyed)
+{
+        GsdAutomountManager *manager = manager_new ();
+        GtkDialog *dialog;
+
+        manager->priv->session_is_active = TRUE;
+        set_known_unlocked (manager);
+        set_locked_hint (manager, FALSE);
+        g_assert_true (manager->priv->was_allowed);
+
+        dialog = show_error_dialog (manager, "Unable to mount", "test");
+        g_assert_nonnull (dialog);
+        g_signal_connect (dialog, "destroy", G_CALLBACK (count_destroy), destroyed);
+        return manager;
+}
+
+/* Losing "allowed" closes the autorun dialogs and the manager's error
+ * dialogs, once; a change that keeps the state does not. */
+static void
+test_transition_closes_dialogs (void)
+{
+        guint destroyed = 0;
+        GsdAutomountManager *manager = allowed_manager_with_error_dialog (&destroyed);
+        guint calls = close_dialogs_calls;
+
+        set_locked_hint (manager, FALSE);               /* allowed -> allowed */
+        g_assert_cmpuint (close_dialogs_calls, ==, calls);
+        g_assert_cmpuint (destroyed, ==, 0);
+
+        set_locked_hint (manager, TRUE);                /* allowed -> not */
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+        g_assert_cmpuint (destroyed, ==, 1);
+        g_assert_null (manager->priv->error_dialogs);
+
+        set_locked_hint (manager, TRUE);                /* not -> not */
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+        set_locked_hint (manager, FALSE);               /* not -> allowed */
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+
+        manager_free (manager);
+}
+
+/* The session going inactive is a transition too. */
+static void
+test_transition_inactive_closes_dialogs (void)
+{
+        guint destroyed = 0;
+        GsdAutomountManager *manager = allowed_manager_with_error_dialog (&destroyed);
+        guint calls = close_dialogs_calls;
+        GVariantBuilder b;
+        GVariant *changed;
+
+        g_variant_builder_init (&b, G_VARIANT_TYPE ("a{sv}"));
+        g_variant_builder_add (&b, "{sv}", "SessionIsActive", g_variant_new_boolean (FALSE));
+        changed = g_variant_ref_sink (g_variant_builder_end (&b));
+        session_state_changed (NULL, changed, NULL, manager);
+        g_variant_unref (changed);
+
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+        g_assert_cmpuint (destroyed, ==, 1);
+        g_assert_null (manager->priv->error_dialogs);
+
+        manager_free (manager);
+}
+
+/* stop(): the prompt that is up is withdrawn, the operation is no longer
+ * guarded, and the dialogs are closed. The test manager never watched a
+ * bus name, so stop() unwatches id 0 twice; GIO reports that. */
+static void
+test_stop_withdraws_and_closes (void)
+{
+        GsdAutomountManager *manager = manager_new ();
+        OpWatch w = { 0 };
+        FakeVolume *volume = start_held_mount (manager, &w);
+        guint destroyed = 0;
+        GtkDialog *dialog;
+        guint calls;
+
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 1);
+        dialog = show_error_dialog (manager, "Unable to mount", "test");
+        g_assert_nonnull (dialog);
+        g_signal_connect (dialog, "destroy", G_CALLBACK (count_destroy), &destroyed);
+        calls = close_dialogs_calls;
+
+        g_test_expect_message ("GLib-GIO", G_LOG_LEVEL_CRITICAL, "*watcher_id > 0*");
+        g_test_expect_message ("GLib-GIO", G_LOG_LEVEL_CRITICAL, "*watcher_id > 0*");
+        gsd_automount_manager_stop (manager);
+        g_test_assert_expected_messages ();
+
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+        g_assert_cmpuint (destroyed, ==, 1);
+        g_assert_false (manager->priv->was_allowed);
+
+        /* no longer guarded: a new prompt is neither refused nor answered */
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 2);
+        g_assert_cmpuint (w.replies, ==, 1);
+
+        fake_volume_finish (volume, TRUE);
+        run_pending ();
+        g_object_unref (volume);
+        manager_free (manager);
+}
+
+/* The ScreenSaver name (re)appears (a locker other than Unity's): its lock
+ * state is unknown again until it answers, so a prompt that is up is
+ * withdrawn and the dialogs are closed. The callback makes a proxy on the
+ * session bus, hence a private test bus. */
+static void
+test_prompt_withdrawn_when_screensaver_appears (void)
+{
+        GTestDBus *bus = g_test_dbus_new (G_TEST_DBUS_NONE);
+        GDBusConnection *connection;
+        GsdAutomountManager *manager;
+        OpWatch w = { 0 };
+        FakeVolume *volume;
+        gboolean done = FALSE;
+        gpointer proxy;
+        guint calls;
+        guint timeout;
+
+        g_test_dbus_up (bus);
+        connection = g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL);
+        g_assert_nonnull (connection);
+
+        manager = manager_new ();
+        volume = start_held_mount (manager, &w);
+        held_ask_password (volume);
+        g_assert_cmpuint (w.probes, ==, 1);
+        calls = close_dialogs_calls;
+
+        screensaver_appeared_callback (connection, SCREENSAVER_NAME, ":1.99", manager);
+        g_assert_cmpuint (w.aborted, ==, 1);
+        g_assert_cmpuint (w.replies, ==, 1);
+        g_assert_cmpint (w.last_result, ==, G_MOUNT_OPERATION_ABORTED);
+        g_assert_cmpuint (close_dialogs_calls, ==, calls + 1);
+
+        /* drop the proxy; the superseded GetActive call holds it until its
+         * callback has run, and the session bus helper caches it until its
+         * last reference goes */
+        proxy = manager->priv->ss_proxy;
+        g_assert_nonnull (proxy);
+        g_object_add_weak_pointer (G_OBJECT (proxy), &proxy);
+        g_cancellable_cancel (manager->priv->ss_cancellable);
+        clear_provider_proxy (manager, &manager->priv->ss_proxy);
+        timeout = g_timeout_add_seconds (10, set_flag, &done);
+        while (proxy != NULL && !done)
+                g_main_context_iteration (NULL, TRUE);
+        g_assert_null (proxy);
+        g_source_remove (timeout);
+        g_clear_object (&manager->priv->ss_cancellable);
+
+        end_held_mount (manager, volume);
+        g_object_unref (connection);
+        g_test_dbus_down (bus);
+        g_object_unref (bus);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -896,6 +1066,10 @@ main (int argc, char **argv)
         g_test_add_func ("/automount/prompt/withdrawn-when-hint-invalidated", test_prompt_withdrawn_when_hint_invalidated);
         g_test_add_func ("/automount/prompt/withdrawn-when-provider-appears", test_prompt_withdrawn_when_provider_appears);
         g_test_add_func ("/automount/dialog/no-error-while-locked", test_no_error_dialog_while_locked);
+        g_test_add_func ("/automount/dialog/transition-closes", test_transition_closes_dialogs);
+        g_test_add_func ("/automount/dialog/inactive-closes", test_transition_inactive_closes_dialogs);
+        g_test_add_func ("/automount/stop/withdraws-and-closes", test_stop_withdraws_and_closes);
+        g_test_add_func ("/automount/prompt/withdrawn-when-screensaver-appears", test_prompt_withdrawn_when_screensaver_appears);
 
         return g_test_run ();
 }
