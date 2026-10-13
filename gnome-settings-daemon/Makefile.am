@@ -82,6 +82,23 @@ $(dbus_idle_built_sources) : Makefile.am idle-monitor.xml
 		--c-generate-object-manager                                             \
 		$(srcdir)/idle-monitor.xml
 
+check_PROGRAMS = test-idle-monitor-dbus
+TESTS = $(check_PROGRAMS)
+
+test_idle_monitor_dbus_SOURCES = \
+	test-idle-monitor-dbus.c \
+	gsd-idle-monitor-private.h
+
+test_idle_monitor_dbus_CFLAGS = $(LIBUNITY_SETTINGS_DAEMON_CFLAGS)
+
+test_idle_monitor_dbus_LDADD = \
+	libunity-settings-daemon.la \
+	$(LIBUNITY_SETTINGS_DAEMON_LIBS)
+
+AM_TESTS_ENVIRONMENT = \
+	GSETTINGS_BACKEND=memory; export GSETTINGS_BACKEND; \
+	G_DEBUG=gc-friendly; export G_DEBUG;
+
 check_gl_texture_size_CPPFLAGS = \
 	$(CHECK_GL_TEXTURE_SIZE_CFLAGS)
 
