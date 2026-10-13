@@ -215,12 +215,16 @@ gsd_mount_guard_detach_all_for (gpointer user_data)
         copy = g_list_copy (entries);
         for (l = copy; l != NULL; l = l->next) {
                 GuardEntry *entry = l->data;
+                GMountOperation *op;
 
                 if (g_list_find (entries, entry) == NULL || entry->user_data != user_data)
                         continue;
+                /* hold the operation while it is withdrawn and detached */
+                op = g_object_ref (entry->op);
                 if (entry->pending)
                         withdraw (entry);
-                gsd_mount_guard_detach (entry->op);
+                gsd_mount_guard_detach (op);
+                g_object_unref (op);
         }
         g_list_free (copy);
 }
