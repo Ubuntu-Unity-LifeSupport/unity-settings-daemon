@@ -1,3 +1,11 @@
+unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity15) resolute; urgency=medium
+
+  * automount: hardening in the mount guard's cleanup.
+  * automount: more tests (dialogs closed on a session change, stop(), a
+    screen locker reappearing, the real question dialog of an unmount).
+
+ -- Ubuntu Unity Life Support <mihail.rozshko@gmail.com>  Tue, 13 Oct 2026 08:35:00 +0000
+
 unity-settings-daemon (15.04.1+21.10.20220802-0ubuntu7+unity14) resolute; urgency=medium
 
   * automount: the helper's mount prompts, error dialogs and autorun dialog
