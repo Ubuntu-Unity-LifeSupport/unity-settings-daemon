@@ -181,7 +181,8 @@ unity_settings_daemon_SOURCES =		\
 	$(NULL)
 
 unity_settings_daemon_CPPFLAGS = \
-	$(AM_CPPFLAGS)
+	$(AM_CPPFLAGS)			\
+	$(SYSTEMD_CFLAGS)
 
 unity_settings_daemon_CFLAGS = 		\
 	$(AM_CFLAGS)
@@ -195,6 +196,7 @@ unity_settings_daemon_LDADD = 		\
 	$(SETTINGS_DAEMON_LIBS)		\
 	$(LIBNOTIFY_LIBS)		\
 	$(GNOME_DESKTOP_LIBS)		\
+	$(SYSTEMD_LIBS)			\
 	$(NULL)
 
 CLEANFILES = $(gsd_SCRIPTS)             \

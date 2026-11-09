@@ -3,5 +3,6 @@ Description=Unity Settings Daemon
 PartOf=graphical-session.target
 
 [Service]
+Type=notify
 ExecStart=/usr/lib/unity-settings-daemon/unity-settings-daemon-localeexec
 Restart=on-failure

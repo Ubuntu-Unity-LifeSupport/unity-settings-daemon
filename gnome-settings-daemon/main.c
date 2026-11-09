@@ -32,6 +32,7 @@
 #include <glib/gstdio.h>
 #include <gtk/gtk.h>
 #include <libnotify/notify.h>
+#include <systemd/sd-daemon.h>
 
 #include "gnome-settings-manager.h"
 #include "gnome-settings-plugin.h"
@@ -344,6 +345,13 @@ watch_for_term_signal (GnomeSettingsManager *manager)
         signal (SIGTERM, on_term_signal);
 }
 
+static gboolean
+notify_ready_idle_cb (gpointer user_data)
+{
+        sd_notify (0, "READY=1");
+        return G_SOURCE_REMOVE;
+}
+
 static void
 name_acquired_handler (GDBusConnection *connection,
                        const gchar *name,
@@ -356,6 +364,9 @@ name_acquired_handler (GDBusConnection *connection,
         set_legacy_ibus_env_vars (proxy);
 #endif
         start_settings_manager ();
+        /* Queue after the idle callbacks of the plugins, so that the
+         * first XSETTINGS notification comes before READY=1. */
+        g_idle_add (notify_ready_idle_cb, NULL);
         register_with_gnome_session (proxy);
         watch_for_term_signal (manager);
 }
